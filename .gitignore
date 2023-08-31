@@ -12,3 +12,8 @@ Cargo.lock
 
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
+
+run.sh
+run_docker.sh
+run_compose.sh
+run_redis.sh
