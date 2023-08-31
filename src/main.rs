@@ -1,3 +1,5 @@
+mod entities;
+
 use actix_files::Files;
 use actix_session::config::PersistentSession;
 use actix_session::storage::RedisActorSessionStore;
@@ -6,6 +8,10 @@ use actix_web::middleware::Logger;
 use actix_web::web::{Data, Redirect};
 use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
 
+use crate::entities::{
+    Config, ErrorInfo, GraphMe, JwtPayloadIDToken, LoginQueryString, MyAppError, MyAppResult,
+    OpenIDConfigurationV2, ResponseAuthorized,
+};
 use actix_web::cookie::time::Duration;
 use actix_web::cookie::SameSite;
 use handlebars::Handlebars;
@@ -20,7 +26,6 @@ use oauth2::{
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::fmt;
 
 const SESSION_KEY_ID_TOKEN: &str = "ID_TOKEN_KEY";
 const SESSION_KEY_ERROR: &str = "ERROR_KEY";
@@ -28,213 +33,6 @@ const SESSION_KEY_ACCESS_TOKEN: &str = "ACCESS_TOKEN";
 
 const PAGE_PROFILE: &str = "/profile";
 const PAGE_ERROR: &str = "/error";
-///
-/// Open ID Configuration
-///
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OpenIDConfigurationV2 {
-    #[serde(rename = "token_endpoint")]
-    pub token_endpoint: Option<String>,
-    #[serde(rename = "token_endpoint_auth_methods_supported")]
-    pub token_endpoint_auth_methods_supported: Option<Vec<String>>,
-    #[serde(rename = "jwks_uri")]
-    pub jwks_uri: Option<String>,
-    #[serde(rename = "response_modes_supported")]
-    pub response_modes_supported: Option<Vec<String>>,
-    #[serde(rename = "subject_types_supported")]
-    pub subject_types_supported: Option<Vec<String>>,
-    #[serde(rename = "id_token_signing_alg_values_supported")]
-    pub id_token_signing_alg_values_supported: Option<Vec<String>>,
-    #[serde(rename = "response_types_supported")]
-    pub response_types_supported: Option<Vec<String>>,
-    #[serde(rename = "scopes_supported")]
-    pub scopes_supported: Option<Vec<String>>,
-    pub issuer: Option<String>,
-    #[serde(rename = "request_uri_parameter_supported")]
-    pub request_uri_parameter_supported: Option<bool>,
-    #[serde(rename = "userinfo_endpoint")]
-    pub userinfo_endpoint: Option<String>,
-    #[serde(rename = "authorization_endpoint")]
-    pub authorization_endpoint: Option<String>,
-    #[serde(rename = "device_authorization_endpoint")]
-    pub device_authorization_endpoint: Option<String>,
-    #[serde(rename = "http_logout_supported")]
-    pub http_logout_supported: Option<bool>,
-    #[serde(rename = "frontchannel_logout_supported")]
-    pub frontchannel_logout_supported: Option<bool>,
-    #[serde(rename = "end_session_endpoint")]
-    pub end_session_endpoint: Option<String>,
-    #[serde(rename = "claims_supported")]
-    pub claims_supported: Option<Vec<String>>,
-    #[serde(rename = "kerberos_endpoint")]
-    pub kerberos_endpoint: Option<String>,
-    #[serde(rename = "tenant_region_scope")]
-    pub tenant_region_scope: Option<String>,
-    #[serde(rename = "cloud_instance_name")]
-    pub cloud_instance_name: Option<String>,
-    #[serde(rename = "cloud_graph_host_name")]
-    pub cloud_graph_host_name: Option<String>,
-    #[serde(rename = "msgraph_host")]
-    pub msgraph_host: Option<String>,
-    #[serde(rename = "rbac_url")]
-    pub rbac_url: Option<String>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct JwtPayloadIDToken {
-    pub aud: Option<String>,
-    pub iss: Option<String>,
-    pub iat: Option<i64>,
-    pub nbf: Option<i64>,
-    pub exp: Option<i64>,
-    pub acct: Option<i64>,
-    pub acrs: Option<Vec<String>>,
-    pub aio: Option<String>,
-    #[serde(rename = "auth_time")]
-    pub auth_time: Option<i64>,
-    pub ctry: Option<String>,
-    pub email: Option<String>,
-    #[serde(rename = "family_name")]
-    pub family_name: Option<String>,
-    #[serde(rename = "given_name")]
-    pub given_name: Option<String>,
-    pub idp: Option<String>,
-    pub ipaddr: Option<String>,
-    #[serde(rename = "login_hint")]
-    pub login_hint: Option<String>,
-    pub name: Option<String>,
-    pub nonce: Option<String>,
-    pub oid: Option<String>,
-    #[serde(rename = "preferred_username")]
-    pub preferred_username: Option<String>,
-    pub rh: Option<String>,
-    pub sid: Option<String>,
-    pub sub: Option<String>,
-    #[serde(rename = "tenant_ctry")]
-    pub tenant_ctry: Option<String>,
-    #[serde(rename = "tenant_region_scope")]
-    pub tenant_region_scope: Option<String>,
-    pub tid: Option<String>,
-    pub uti: Option<String>,
-    pub ver: Option<String>,
-    #[serde(rename = "xms_pl")]
-    pub xms_pl: Option<String>,
-    #[serde(rename = "xms_tpl")]
-    pub xms_tpl: Option<String>,
-    pub department: Option<String>,
-    pub companyname: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct ErrorInfo {
-    #[serde(with = "http_serde::status_code")]
-    http_status_code: StatusCode,
-    http_status_message: Option<String>,
-    error_message: Option<String>,
-}
-
-impl ErrorInfo {
-    fn new(http_status_code: StatusCode) -> Self {
-        ErrorInfo {
-            http_status_code,
-            http_status_message: None,
-            error_message: None,
-        }
-    }
-    fn set_error_message(&mut self, error_message: String) -> &Self {
-        self.error_message = Some(error_message);
-        self
-    }
-    fn get_http_status_message(&self) -> String {
-        self.http_status_code.to_string()
-    }
-}
-#[derive(Debug, Clone, Deserialize, Serialize)]
-struct GraphMe {
-    #[serde(rename = "companyName")]
-    company_name: String,
-    #[serde(rename = "department")]
-    department: String,
-    #[serde(rename = "displayName")]
-    display_name: String,
-    #[serde(rename = "employeeId")]
-    employee_id: String,
-    #[serde(rename = "jwt_token_raw")]
-    jwt_token_raw: Option<String>,
-}
-#[derive(Debug, Clone)]
-struct Config {
-    redis_url: String,
-    redis_auth_key: String,
-    tenant_id: String,
-    default_page: String,
-    redirect: String,
-    client_id: String,
-    client_secret: String,
-    open_id_config: Option<OpenIDConfigurationV2>,
-}
-
-impl Config {
-    fn new(
-        redis_url: String,
-        redis_auth_key: String,
-        tenant_id: String,
-        default_page: String,
-        redirect: String,
-        client_id: String,
-        client_secret: String,
-    ) -> Self {
-        Config {
-            redis_url,
-            redis_auth_key,
-            tenant_id,
-            default_page,
-            redirect,
-            client_id,
-            client_secret,
-            open_id_config: None,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct LoginQueryString {
-    #[serde(rename(deserialize = "response_type"))]
-    response_type: Option<String>,
-}
-#[derive(Debug, Deserialize)]
-pub struct ResponseAuthorized {
-    #[serde(rename(deserialize = "code"))]
-    code: Option<String>,
-    #[serde(rename(deserialize = "session_state"))]
-    session_state: Option<String>,
-    #[serde(rename(deserialize = "state"))]
-    state: Option<String>,
-    #[serde(rename(deserialize = "id_token"))]
-    id_token: Option<String>,
-    #[serde(rename(deserialize = "error"))]
-    error: Option<String>,
-    #[serde(rename(deserialize = "error_description"))]
-    error_description: Option<String>,
-}
-
-type MyAppResult<T> = std::result::Result<T, MyAppError>;
-#[derive(Debug, Clone, Serialize)]
-struct MyAppError {
-    error_message: String,
-}
-impl MyAppError {
-    fn new(error_message: String) -> Self {
-        MyAppError { error_message }
-    }
-}
-impl fmt::Display for MyAppError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "App Error {}", self.error_message)
-    }
-}
 
 ///
 /// Function get code verifier
