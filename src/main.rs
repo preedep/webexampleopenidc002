@@ -331,6 +331,9 @@ async fn profile(
         .unwrap();
     return match basic_token {
         None => {
+            //
+            //  ID Token
+            //
             let token = session
                 .get::<JwtPayloadIDToken>(SESSION_KEY_ID_TOKEN)
                 .unwrap();
@@ -339,12 +342,12 @@ async fn profile(
                 Some(jwt) => {
                     debug!("JWT ID Token : {:#?}", jwt);
 
-                    let mut user = GraphMe {
+                    let user = GraphMe {
                         company_name: jwt.to_owned().companyname.unwrap_or("".to_string()),
                         department: jwt.to_owned().department.unwrap_or("".to_string()),
                         display_name: jwt.name.to_owned().unwrap_or("".to_string()),
                         employee_id: "".to_string(),
-                        jwt_token_raw: Some(serde_json::to_string_pretty(&jwt.to_owned()).unwrap()),
+                        jwt_token_raw: Some(serde_json::to_string(&jwt.to_owned()).unwrap()),
                     };
 
                     let body = hb.render("profile", &user).unwrap();
@@ -353,6 +356,9 @@ async fn profile(
             }
         }
         Some(token) => {
+            //
+            //  Get Access Token
+            //
             let url = data.open_id_config.clone().unwrap().msgraph_host.unwrap();
             let url = format!(
                 "https://{}/v1.0/me?$select=displayName,department,employeeId,companyName",
@@ -371,7 +377,8 @@ async fn profile(
 
             let res_me = res_user_info.unwrap().json::<GraphMe>().await;
             match res_me {
-                Ok(user) => {
+                Ok(mut user) => {
+                    user.jwt_token_raw = Some(serde_json::to_string(&user.to_owned()).unwrap());
                     let body = hb.render("profile", &user).unwrap();
                     HttpResponse::Ok().body(body)
                 }

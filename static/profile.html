@@ -7,9 +7,9 @@
     Company : {{companyName}} <br/><br/>
     ======= <br/><br/>
 
-    <div id="json">
+    <pre id="json">
 
-    </div>
+    </pre>
     <script type="text/javascript">
 
         function decodeHTMLEntities(text) {
@@ -31,11 +31,12 @@
 
             return text;
         }
-
-        var data = decodeHTMLEntities('{{jwt_token_raw}}');
-        document.getElementById("json").innerHTML = JSON.stringify(JSON.parse(data), undefined, 2);
+        var data = decodeHTMLEntities("{{jwt_token_raw}}");
+        console.log(data);
+        document.getElementById("json").innerHTML = JSON.stringify(JSON.parse(data), null, 4);
 
     </script>
+
     <br/>
     <a href="/logout">Logout</a>
 </body>
