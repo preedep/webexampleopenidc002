@@ -17,3 +17,5 @@ run.sh
 run_docker.sh
 run_compose.sh
 run_redis.sh
+.idea/
+local.env
