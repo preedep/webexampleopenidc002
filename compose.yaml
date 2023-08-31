@@ -1,0 +1,23 @@
+services:
+  redis_session:
+    container_name: redis_session
+    image: "redis:7.2.0-alpine3.18"
+    ports:
+      - "6379:6379"
+    networks:
+      - redis_session
+
+  webexampleopenidc002:
+    container_name: webexampleopenidc002
+    image: "nickmsft/webexampleopenidc2:1.0"
+    env_file:
+      - local.env
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis_session
+    networks:
+      - redis_session
+networks:
+  redis_session:
+    driver: bridge

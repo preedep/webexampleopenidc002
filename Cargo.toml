@@ -1,0 +1,27 @@
+[package]
+name = "webexampleopenidc002"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+actix-redis = "0.12"
+actix-session = {version = "0.7" , features = ["redis-actor-session"]}
+actix-web = "4.3"
+handlebars = {version = "4.3" ,features = ["dir_source"]}
+log = "0.4"
+oauth2 = { version = "4.4" , default-features = false, features = ["reqwest","rustls-tls"]}
+reqwest = { version = "0.11", default-features = false,features = ["json","rustls-tls"] }
+pretty_env_logger = "0.5"
+serde = {version = "1.0" , features = ["derive"]}
+serde_json = "1"
+futures = "0.3"
+actix-files = "0.6"
+jsonwebtoken = {version = "8.3" , features = ["use_pem"]}
+urlencoding = "2.1"
+base64 = "0.21"
+#actix-web-lab = "0.19"
+http-serde = "1.1"
+rand = "0.8"
+

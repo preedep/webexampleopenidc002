@@ -1,0 +1,42 @@
+<html lang="th">
+<body>
+    <h1>Welcome</h1>
+    <h2>{{displayName}}</h2> <br/><br/>
+    Employee ID : {{employeeId}} <br/>
+    Department : {{department}} <br/>
+    Company : {{companyName}} <br/><br/>
+    ======= <br/><br/>
+
+    <div id="json">
+
+    </div>
+    <script type="text/javascript">
+
+        function decodeHTMLEntities(text) {
+            var entities = [
+                ['amp', '&'],
+                ['apos', '\''],
+                ['#x27', '\''],
+                ['#x2F', '/'],
+                ['#39', '\''],
+                ['#47', '/'],
+                ['lt', '<'],
+                ['gt', '>'],
+                ['nbsp', ' '],
+                ['quot', '"']
+            ];
+
+            for (var i = 0, max = entities.length; i < max; ++i)
+                text = text.replace(new RegExp('&' + entities[i][0] + ';', 'g'), entities[i][1]);
+
+            return text;
+        }
+
+        var data = decodeHTMLEntities('{{jwt_token_raw}}');
+        document.getElementById("json").innerHTML = JSON.stringify(JSON.parse(data), undefined, 2);
+
+    </script>
+    <br/>
+    <a href="/logout">Logout</a>
+</body>
+</html>
