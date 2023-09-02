@@ -8,10 +8,7 @@ use actix_web::middleware::Logger;
 use actix_web::web::{Data, Redirect};
 use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
 
-use crate::entities::{
-    Config, ErrorInfo, GraphMe, JwtPayloadIDToken, LoginQueryString, MyAppError, MyAppResult,
-    OpenIDConfigurationV2, ResponseAuthorized,
-};
+use crate::entities::{Config, ErrorInfo, GraphMe, JWKS, JwtPayloadIDToken, LoginQueryString, MyAppError, MyAppResult, OpenIDConfigurationV2, ResponseAuthorized};
 use actix_web::cookie::time::Duration;
 use actix_web::cookie::SameSite;
 use handlebars::Handlebars;
@@ -340,8 +337,37 @@ async fn profile(
             match token {
                 None => HttpResponse::InternalServerError().finish(),
                 Some(jwt) => {
+                    //
+                    //  Validate the signing key issuer
+                    //  Get jwks
+                    //
+                    let jwks_uri = data.open_id_config.clone().unwrap().jwks_uri.unwrap();
+                    let jwks_items = reqwest::get(jwks_uri)
+                        .await
+                        .unwrap()
+                        .json::<JWKS>().await;
+                    match jwks_items {
+                        Ok(jwks) => {
+                            debug!("JWKS = {:#?}",jwks);
+                            //var issuer = metadata["kid"].issuer;
+                            // if (issuer.contains("{tenantId}", CaseInvariant)) issuer = issuer.Replace("{tenantid}", token["tid"], CaseInvariant);
+                            // if (issuer != token["iss"]) throw validationException;
+                            // if (configuration.allowedIssuer != "*" && configuration.allowedIssuer != issuer) throw validationException;
+                            // var issUri = new Uri(token["iss"]);
+                            // if (issUri.Segments.Count < 1) throw validationException;
+                            // if (issUri.Segments[1] != token["tid"]) throw validationException;
+                            if data.open_id_config.clone().unwrap().issuer.unwrap().eq(jwt.iss.clone().unwrap().as_str()) {
+                                debug!("Issuer matched");
+                            }else{
+                                error!("Issuer not matched");
+                            }
+                        }
+                        Err(e) => {
+                            error!("Get jwks error : {}", e);
+                        }
+                    }
+                    //
                     debug!("JWT ID Token : {:#?}", jwt);
-
                     let user = GraphMe {
                         company_name: jwt.to_owned().companyname.unwrap_or("".to_string()),
                         department: jwt.to_owned().department.unwrap_or("".to_string()),

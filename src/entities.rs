@@ -101,6 +101,27 @@ pub struct JwtPayloadIDToken {
     pub companyname: Option<String>,
 }
 
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JWKS {
+    pub keys: Option<Vec<JWKSKeyItem>>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JWKSKeyItem {
+    pub kty: Option<String>,
+    #[serde(rename = "use")]
+    pub use_field: Option<String>,
+    pub kid: Option<String>,
+    pub x5t: Option<String>,
+    pub n: Option<String>,
+    pub e: Option<String>,
+    pub x5c: Option<Vec<String>>,
+    pub issuer: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ErrorInfo {
     #[serde(with = "http_serde::status_code")]
@@ -148,6 +169,7 @@ pub struct Config {
     pub client_id: String,
     pub client_secret: String,
     pub open_id_config: Option<OpenIDConfigurationV2>,
+    pub jwks: Option<JWKS>
 }
 
 impl Config {
@@ -169,6 +191,7 @@ impl Config {
             client_id,
             client_secret,
             open_id_config: None,
+            jwks: None,
         }
     }
 }
