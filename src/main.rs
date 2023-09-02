@@ -258,7 +258,7 @@ async fn login(
         .add_scope(Scope::new("profile".to_string()))
         .add_scope(Scope::new("email".to_string()))
         .add_scope(Scope::new("User.Read".to_string()))
-        .add_scope(Scope::new("ping.value".to_string()))
+        .add_scope(Scope::new("api://81dd62c1-4209-4f24-bd81-99912098a77f/ping.value".to_string()))
         .set_pkce_challenge(pkce_challenge);
 
     let mut response_mode = "query";
