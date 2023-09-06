@@ -258,7 +258,7 @@ async fn login(
         .add_scope(Scope::new("profile".to_string()))
         .add_scope(Scope::new("email".to_string()))
         .add_scope(Scope::new("User.Read".to_string()))
-        .add_scope(Scope::new("api://81dd62c1-4209-4f24-bd81-99912098a77f/ping.value".to_string()))
+        .add_scope(Scope::new("api://81dd62c1-4209-4f24-bd81-99912098a77f/ping.message".to_string()))
         .set_pkce_challenge(pkce_challenge);
 
     let mut response_mode = "query";
@@ -375,6 +375,8 @@ async fn profile(
                         display_name: jwt.name.to_owned().unwrap_or("".to_string()),
                         employee_id: "".to_string(),
                         jwt_token_raw: Some(serde_json::to_string(&jwt.to_owned()).unwrap()),
+                        access_token: None,
+                        ping_url: Some(data.to_owned().ping_url.clone().unwrap()),
                     };
 
                     let body = hb.render("profile", &user).unwrap();
@@ -405,6 +407,8 @@ async fn profile(
             let res_me = res_user_info.unwrap().json::<GraphMe>().await;
             match res_me {
                 Ok(mut user) => {
+                    user.ping_url = Some(data.to_owned().ping_url.clone().unwrap());
+                    user.access_token = Some(token.access_token().secret().to_string());
                     user.jwt_token_raw = Some(serde_json::to_string(&user.to_owned()).unwrap());
                     let body = hb.render("profile", &user).unwrap();
                     HttpResponse::Ok().body(body)
@@ -460,6 +464,7 @@ async fn main() -> std::io::Result<()> {
     let client_id = std::env::var("CLIENT_ID").unwrap();
     let client_secret = std::env::var("CLIENT_SECRET").unwrap();
     let cookie_ssl = std::env::var("COOKIE_SSL").unwrap_or("false".to_string());
+    let ping_service_url = std::env::var("PING_SERVICE").unwrap_or("http://localhost:8081/ping".to_string());
 
     let use_cookie_ssl: bool = match cookie_ssl.as_str() {
         "false" => false,
@@ -476,6 +481,8 @@ async fn main() -> std::io::Result<()> {
         client_id,
         client_secret,
     );
+    config.ping_url = Some(ping_service_url);
+
 
     debug!("Get configuration from env complete");
     debug!("Cookie SSL : {}", use_cookie_ssl);

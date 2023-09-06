@@ -158,6 +158,10 @@ pub struct GraphMe {
     pub employee_id: String,
     #[serde(rename = "jwt_token_raw")]
     pub jwt_token_raw: Option<String>,
+    #[serde(rename = "access_token")]
+    pub access_token: Option<String>,
+    #[serde(rename = "ping_url")]
+    pub ping_url: Option<String>,
 }
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -169,7 +173,8 @@ pub struct Config {
     pub client_id: String,
     pub client_secret: String,
     pub open_id_config: Option<OpenIDConfigurationV2>,
-    pub jwks: Option<JWKS>
+    pub jwks: Option<JWKS>,
+    pub ping_url : Option<String>,
 }
 
 impl Config {
@@ -192,6 +197,7 @@ impl Config {
             client_secret,
             open_id_config: None,
             jwks: None,
+            ping_url: None,
         }
     }
 }

@@ -1,5 +1,9 @@
 <html lang="th">
 <head>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
     <style>
         pre {outline: 1px solid #ccc; padding: 5px; margin: 5px; }
         .string { color: green; }
@@ -8,6 +12,7 @@
         .null { color: magenta; }
         .key { color: red; }
     </style>
+    <title>Profile </title>
 </head>
 <body>
     <h1>Welcome</h1>
@@ -16,7 +21,26 @@
     Department : {{department}} <br/>
     Company : {{companyName}} <br/><br/>
     ======= <br/><br/>
+    Access Token : {{access_token}} <br/><br/>
 
+        <input id="access_token" type="hidden" name="access_token" value="{{access_token}}">
+        <input id="submitButton" type="button" value="Call API with Access Token" > <br/><br/>
+
+    <script type="text/javascript">
+        $('#submitButton').on('click',function(){
+            $.ajax({
+            url: "{{ping_url}}",
+            type: 'POST',
+            headers: {
+                "Authorization": "Bearer " + $('#access_token').val()
+            },
+            async: false,
+        }).done(function (data){
+                console.log(data);
+            });
+    });
+    </script>
+    ====== <br/><br/>
     <pre id="json">
 
     </pre>
