@@ -37,9 +37,12 @@
             async: false,
         }).done(function (data){
                 console.log(data);
+                document.getElementById("json_api_reponse").innerHTML = syntaxHighlight(JSON.stringify(JSON.parse(data), null, 4));
             });
     });
     </script>
+    ====== <br/><br/>
+    <pre id="json_api_reponse"></pre>
     ====== <br/><br/>
     <pre id="json">
 
