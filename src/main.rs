@@ -162,12 +162,10 @@ async fn callback(
                 )
                 // Set the URL the user will be redirected to after the authorization process.
                 .set_redirect_uri(RedirectUrl::new(data.redirect.clone()).unwrap());
-
                 info!("request access token ");
                 let token_result = client
                     .exchange_code(AuthorizationCode::new(params.code.unwrap()))
                     .add_extra_param("code_verifier", verifier.unwrap().secret())
-                    //.request(http_client);
                     .request_async(async_http_client)
                     .await;
                 debug!("token result > {:#?}", token_result);
