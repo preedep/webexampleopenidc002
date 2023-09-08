@@ -74,6 +74,7 @@ pub struct JwtPayloadIDToken {
     pub family_name: Option<String>,
     #[serde(rename = "given_name")]
     pub given_name: Option<String>,
+    pub groups: Option<Vec<String>>,
     pub idp: Option<String>,
     pub ipaddr: Option<String>,
     #[serde(rename = "login_hint")]
@@ -93,6 +94,7 @@ pub struct JwtPayloadIDToken {
     pub tid: Option<String>,
     pub uti: Option<String>,
     pub ver: Option<String>,
+    pub wids: Option<Vec<String>>,
     #[serde(rename = "xms_pl")]
     pub xms_pl: Option<String>,
     #[serde(rename = "xms_tpl")]
@@ -149,13 +151,13 @@ impl ErrorInfo {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct GraphMe {
     #[serde(rename = "companyName")]
-    pub company_name: String,
+    pub company_name: Option<String>,
     #[serde(rename = "department")]
-    pub department: String,
+    pub department: Option<String>,
     #[serde(rename = "displayName")]
-    pub display_name: String,
+    pub display_name: Option<String>,
     #[serde(rename = "employeeId")]
-    pub employee_id: String,
+    pub employee_id: Option<String>,
     #[serde(rename = "jwt_token_raw")]
     pub jwt_token_raw: Option<String>,
     #[serde(rename = "access_token")]
@@ -221,6 +223,15 @@ pub struct ResponseAuthorized {
     pub error: Option<String>,
     #[serde(rename(deserialize = "error_description"))]
     pub error_description: Option<String>,
+    #[serde(rename(deserialize = "access_token"))]
+    pub access_token: Option<String>,
+    #[serde(rename(deserialize = "token_type"))]
+    pub token_type: Option<String>,
+    #[serde(rename(deserialize = "scope"))]
+    pub scope: Option<String>,
+    #[serde(rename(deserialize = "expires_in"))]
+    pub expires_in: Option<i64>,
+
 }
 
 pub type MyAppResult<T> = Result<T, MyAppError>;

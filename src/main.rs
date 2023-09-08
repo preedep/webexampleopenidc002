@@ -1,5 +1,7 @@
 mod entities;
 
+use std::ops::Add;
+use std::ptr::null;
 use actix_files::Files;
 use actix_session::config::PersistentSession;
 use actix_session::storage::RedisActorSessionStore;
@@ -14,12 +16,9 @@ use actix_web::cookie::SameSite;
 use handlebars::Handlebars;
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use log::{debug, error, info};
-use oauth2::basic::{BasicClient, BasicTokenResponse};
+use oauth2::basic::{BasicClient, BasicTokenResponse, BasicTokenType};
 use oauth2::reqwest::async_http_client;
-use oauth2::{
-    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, PkceCodeChallenge,
-    PkceCodeVerifier, RedirectUrl, ResponseType, Scope, TokenResponse, TokenUrl,
-};
+use oauth2::{AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, ResponseType, Scope, TokenResponse, TokenUrl, StandardTokenResponse, AccessToken, EmptyExtraTokenFields};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -127,6 +126,16 @@ async fn callback(
                 let data = decode::<JwtPayloadIDToken>(jwt_id_token.as_str(), &key, &validation);
                 match session.insert(SESSION_KEY_ID_TOKEN, data.unwrap().claims) {
                     Ok(_) => {
+
+                        if params.access_token.is_some() {
+                            session.insert(SESSION_KEY_ACCESS_TOKEN,
+                                           BasicTokenResponse::new(
+                                               AccessToken::new(params.access_token.unwrap()),
+                                               BasicTokenType::Bearer,EmptyExtraTokenFields{})
+                                           ).unwrap();
+                            debug!("Insert ACCESS_KEY Successful ");
+                        }
+
                         debug!("Insert ID_TOKEN_KEY Successful ");
                         Redirect::to(PAGE_PROFILE).permanent()
                     }
@@ -162,10 +171,23 @@ async fn callback(
                 )
                 // Set the URL the user will be redirected to after the authorization process.
                 .set_redirect_uri(RedirectUrl::new(data.redirect.clone()).unwrap());
+
+                /*
+                let mut scopes: Vec<Scope> = Vec::new();
+                scopes.push(Scope::new("openid".to_string()));
+                scopes.push(Scope::new("email".to_string()));
+                scopes.push(Scope::new("profile".to_string()));
+                scopes.push(Scope::new("User.Read".to_string()));
+                scopes.push(Scope::new("api://81dd62c1-4209-4f24-bd81-99912098a77f/ping.message".to_string()));
+               let scope =  scopes.iter().map(|s| s.to_string()).collect::<Vec<_>>()
+                    .join(" ");
+                */
+                //add("email").add("User.Read").add("api://81dd62c1-4209-4f24-bd81-99912098a77f/ping.message");
                 info!("request access token ");
                 let token_result = client
                     .exchange_code(AuthorizationCode::new(params.code.unwrap()))
                     .add_extra_param("code_verifier", verifier.unwrap().secret())
+                    //.add_extra_param("scope",scope)
                     .request_async(async_http_client)
                     .await;
                 debug!("token result > {:#?}", token_result);
@@ -253,16 +275,18 @@ async fn login(
         .authorize_url(CsrfToken::new_random)
         // Set the desired scopes.
         .add_scope(Scope::new("openid".to_string()))
-        .add_scope(Scope::new("profile".to_string()))
-        .add_scope(Scope::new("email".to_string()))
-        .add_scope(Scope::new("User.Read".to_string()))
-        .add_scope(Scope::new("api://81dd62c1-4209-4f24-bd81-99912098a77f/ping.message".to_string()))
+        .add_scope(Scope::new("offline_access".to_string()))
+        //.add_scope(Scope::new("User.Read".to_string()))
         .set_pkce_challenge(pkce_challenge);
 
     let mut response_mode = "query";
-    if response_type.eq("id_token") {
+    if response_type.eq("id_token") ||  response_type.eq("id_token token"){
         response_mode = "form_post";
-        auth_req = auth_req.add_extra_param("nonce", "1234234233232322222")
+        auth_req = auth_req
+            .add_scope(Scope::new("profile".to_string()))
+            .add_scope(Scope::new("email".to_string()))
+            .add_scope(Scope::new("api://81dd62c1-4209-4f24-bd81-99912098a77f/Ping.All".to_string()))
+            .add_extra_param("nonce", "1234234233232322222")
     }
     auth_req = auth_req.add_extra_param("response_mode", response_mode);
     let res_type = ResponseType::new(response_type);
@@ -368,15 +392,14 @@ async fn profile(
                     //
                     debug!("JWT ID Token : {:#?}", jwt);
                     let user = GraphMe {
-                        company_name: jwt.to_owned().companyname.unwrap_or("".to_string()),
-                        department: jwt.to_owned().department.unwrap_or("".to_string()),
-                        display_name: jwt.name.to_owned().unwrap_or("".to_string()),
-                        employee_id: "".to_string(),
+                        company_name: Some(jwt.to_owned().companyname.unwrap_or("".to_string())),
+                        department: Some(jwt.to_owned().department.unwrap_or("".to_string())),
+                        display_name: Some(jwt.name.to_owned().unwrap_or("".to_string())),
+                        employee_id: Some("".to_string()),
                         jwt_token_raw: Some(serde_json::to_string(&jwt.to_owned()).unwrap()),
                         access_token: None,
                         ping_url: Some(data.to_owned().ping_url.clone().unwrap()),
                     };
-
                     let body = hb.render("profile", &user).unwrap();
                     HttpResponse::Ok().body(body)
                 }
@@ -488,13 +511,23 @@ async fn main() -> std::io::Result<()> {
     //
     // Get azure ad meta data
     //
+
     let url_openid_config = format!(
         r#"https://login.microsoftonline.com/{:1}/v2.0/.well-known/openid-configuration?appid={:2}"#,
         config.to_owned().tenant_id,
         config.to_owned().client_id
     );
 
-    info!("url validation : {}", url_openid_config);
+    /*
+    let url_openid_config = format!(
+        r#"https://login.microsoftonline.com/{:1}/.well-known/openid-configuration?appid={:2}"#,
+        config.to_owned().tenant_id,
+        config.to_owned().client_id
+    );
+*/
+
+
+    info!("url get azure ad configuration : {}", url_openid_config);
     let meta_azure_ad = reqwest::get(url_openid_config)
         .await
         .unwrap()
