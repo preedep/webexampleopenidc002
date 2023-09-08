@@ -103,7 +103,6 @@ pub struct JwtPayloadIDToken {
     pub companyname: Option<String>,
 }
 
-
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JWKS {
@@ -176,7 +175,7 @@ pub struct Config {
     pub client_secret: String,
     pub open_id_config: Option<OpenIDConfigurationV2>,
     pub jwks: Option<JWKS>,
-    pub ping_url : Option<String>,
+    pub ping_url: Option<String>,
 }
 
 impl Config {
@@ -231,7 +230,6 @@ pub struct ResponseAuthorized {
     pub scope: Option<String>,
     #[serde(rename(deserialize = "expires_in"))]
     pub expires_in: Option<i64>,
-
 }
 
 pub type MyAppResult<T> = Result<T, MyAppError>;

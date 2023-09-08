@@ -1,7 +1,5 @@
 mod entities;
 
-use std::ops::Add;
-use std::ptr::null;
 use actix_files::Files;
 use actix_session::config::PersistentSession;
 use actix_session::storage::RedisActorSessionStore;
@@ -10,7 +8,10 @@ use actix_web::middleware::Logger;
 use actix_web::web::{Data, Redirect};
 use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
 
-use crate::entities::{Config, ErrorInfo, GraphMe, JWKS, JwtPayloadIDToken, LoginQueryString, MyAppError, MyAppResult, OpenIDConfigurationV2, ResponseAuthorized};
+use crate::entities::{
+    Config, ErrorInfo, GraphMe, JwtPayloadIDToken, LoginQueryString, MyAppError, MyAppResult,
+    OpenIDConfigurationV2, ResponseAuthorized,
+};
 use actix_web::cookie::time::Duration;
 use actix_web::cookie::SameSite;
 use handlebars::Handlebars;
@@ -18,9 +19,12 @@ use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use log::{debug, error, info};
 use oauth2::basic::{BasicClient, BasicTokenResponse, BasicTokenType};
 use oauth2::reqwest::async_http_client;
-use oauth2::{AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, ResponseType, Scope, TokenResponse, TokenUrl, StandardTokenResponse, AccessToken, EmptyExtraTokenFields};
+use oauth2::{
+    AccessToken, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
+    EmptyExtraTokenFields, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, ResponseType, Scope,
+    TokenResponse, TokenUrl,
+};
 use reqwest::StatusCode;
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 const SESSION_KEY_ID_TOKEN: &str = "ID_TOKEN_KEY";
@@ -126,13 +130,17 @@ async fn callback(
                 let data = decode::<JwtPayloadIDToken>(jwt_id_token.as_str(), &key, &validation);
                 match session.insert(SESSION_KEY_ID_TOKEN, data.unwrap().claims) {
                     Ok(_) => {
-
                         if params.access_token.is_some() {
-                            session.insert(SESSION_KEY_ACCESS_TOKEN,
-                                           BasicTokenResponse::new(
-                                               AccessToken::new(params.access_token.unwrap()),
-                                               BasicTokenType::Bearer,EmptyExtraTokenFields{})
-                                           ).unwrap();
+                            session
+                                .insert(
+                                    SESSION_KEY_ACCESS_TOKEN,
+                                    BasicTokenResponse::new(
+                                        AccessToken::new(params.access_token.unwrap()),
+                                        BasicTokenType::Bearer,
+                                        EmptyExtraTokenFields {},
+                                    ),
+                                )
+                                .unwrap();
                             debug!("Insert ACCESS_KEY Successful ");
                         }
 
@@ -173,15 +181,15 @@ async fn callback(
                 .set_redirect_uri(RedirectUrl::new(data.redirect.clone()).unwrap());
 
                 /*
-                let mut scopes: Vec<Scope> = Vec::new();
-                scopes.push(Scope::new("openid".to_string()));
-                scopes.push(Scope::new("email".to_string()));
-                scopes.push(Scope::new("profile".to_string()));
-                scopes.push(Scope::new("User.Read".to_string()));
-                scopes.push(Scope::new("api://81dd62c1-4209-4f24-bd81-99912098a77f/ping.message".to_string()));
-               let scope =  scopes.iter().map(|s| s.to_string()).collect::<Vec<_>>()
-                    .join(" ");
-                */
+                 let mut scopes: Vec<Scope> = Vec::new();
+                 scopes.push(Scope::new("openid".to_string()));
+                 scopes.push(Scope::new("email".to_string()));
+                 scopes.push(Scope::new("profile".to_string()));
+                 scopes.push(Scope::new("User.Read".to_string()));
+                 scopes.push(Scope::new("api://81dd62c1-4209-4f24-bd81-99912098a77f/ping.message".to_string()));
+                let scope =  scopes.iter().map(|s| s.to_string()).collect::<Vec<_>>()
+                     .join(" ");
+                 */
                 //add("email").add("User.Read").add("api://81dd62c1-4209-4f24-bd81-99912098a77f/ping.message");
                 info!("request access token ");
                 let token_result = client
@@ -280,12 +288,14 @@ async fn login(
         .set_pkce_challenge(pkce_challenge);
 
     let mut response_mode = "query";
-    if response_type.eq("id_token") ||  response_type.eq("id_token token"){
+    if response_type.eq("id_token") || response_type.eq("id_token token") {
         response_mode = "form_post";
         auth_req = auth_req
             .add_scope(Scope::new("profile".to_string()))
             .add_scope(Scope::new("email".to_string()))
-            .add_scope(Scope::new("api://81dd62c1-4209-4f24-bd81-99912098a77f/Ping.All".to_string()))
+            .add_scope(Scope::new(
+                "api://81dd62c1-4209-4f24-bd81-99912098a77f/Ping.All".to_string(),
+            ))
             .add_extra_param("nonce", "1234234233232322222")
     }
     auth_req = auth_req.add_extra_param("response_mode", response_mode);
@@ -346,66 +356,18 @@ async fn profile(
     data: web::Data<Config>,
     hb: web::Data<Handlebars<'_>>,
 ) -> impl Responder {
-    let basic_token = session
-        .get::<BasicTokenResponse>(SESSION_KEY_ACCESS_TOKEN)
+    let id_token = session
+        .get::<JwtPayloadIDToken>(SESSION_KEY_ID_TOKEN)
         .unwrap();
-    return match basic_token {
+    return match id_token {
         None => {
-            //
-            //  ID Token
-            //
-            let token = session
-                .get::<JwtPayloadIDToken>(SESSION_KEY_ID_TOKEN)
+            //auth code flow
+            let access_token = session
+                .get::<BasicTokenResponse>(SESSION_KEY_ACCESS_TOKEN)
                 .unwrap();
-            match token {
-                None => HttpResponse::InternalServerError().finish(),
-                Some(jwt) => {
-                    //
-                    //  Validate the signing key issuer
-                    //  Get jwks
-                    //
-                    let jwks_uri = data.open_id_config.clone().unwrap().jwks_uri.unwrap();
-                    let jwks_items = reqwest::get(jwks_uri)
-                        .await
-                        .unwrap()
-                        .json::<JWKS>().await;
-                    match jwks_items {
-                        Ok(jwks) => {
-                            debug!("JWKS = {:#?}",jwks);
-                            //var issuer = metadata["kid"].issuer;
-                            // if (issuer.contains("{tenantId}", CaseInvariant)) issuer = issuer.Replace("{tenantid}", token["tid"], CaseInvariant);
-                            // if (issuer != token["iss"]) throw validationException;
-                            // if (configuration.allowedIssuer != "*" && configuration.allowedIssuer != issuer) throw validationException;
-                            // var issUri = new Uri(token["iss"]);
-                            // if (issUri.Segments.Count < 1) throw validationException;
-                            // if (issUri.Segments[1] != token["tid"]) throw validationException;
-                            if data.open_id_config.clone().unwrap().issuer.unwrap().eq(jwt.iss.clone().unwrap().as_str()) {
-                                debug!("Issuer matched");
-                            }else{
-                                error!("Issuer not matched");
-                            }
-                        }
-                        Err(e) => {
-                            error!("Get jwks error : {}", e);
-                        }
-                    }
-                    //
-                    debug!("JWT ID Token : {:#?}", jwt);
-                    let user = GraphMe {
-                        company_name: Some(jwt.to_owned().companyname.unwrap_or("".to_string())),
-                        department: Some(jwt.to_owned().department.unwrap_or("".to_string())),
-                        display_name: Some(jwt.name.to_owned().unwrap_or("".to_string())),
-                        employee_id: Some("".to_string()),
-                        jwt_token_raw: Some(serde_json::to_string(&jwt.to_owned()).unwrap()),
-                        access_token: None,
-                        ping_url: Some(data.to_owned().ping_url.clone().unwrap()),
-                    };
-                    let body = hb.render("profile", &user).unwrap();
-                    HttpResponse::Ok().body(body)
-                }
-            }
-        }
-        Some(token) => {
+            //if access_token.is_some()
+
+            let access_token = access_token.unwrap();
             //
             //  Get Access Token
             //
@@ -419,26 +381,48 @@ async fn profile(
                 .get(url)
                 .header(
                     "Authorization",
-                    format!("Bearer {}", token.access_token().secret()),
+                    format!("Bearer {}", access_token.access_token().secret()),
                 )
                 .header("Content-Type", "application/json")
                 .send()
                 .await;
 
             let res_me = res_user_info.unwrap().json::<GraphMe>().await;
-            match res_me {
-                Ok(mut user) => {
-                    user.ping_url = Some(data.to_owned().ping_url.clone().unwrap());
-                    user.access_token = Some(token.access_token().secret().to_string());
-                    user.jwt_token_raw = Some(serde_json::to_string(&user.to_owned()).unwrap());
-                    let body = hb.render("profile", &user).unwrap();
-                    HttpResponse::Ok().body(body)
-                }
-                Err(e) => HttpResponse::InternalServerError().body(format!("{}", e)),
+            let mut user = res_me.unwrap();
+            user.ping_url = Some(data.to_owned().ping_url.clone().unwrap());
+            user.access_token = Some(access_token.access_token().secret().to_string());
+            user.jwt_token_raw = Some(serde_json::to_string(&user.to_owned()).unwrap());
+            let body = hb.render("profile", &user).unwrap();
+            HttpResponse::Ok().body(body)
+        }
+        Some(id_token) => {
+            let access_token = session
+                .get::<BasicTokenResponse>(SESSION_KEY_ACCESS_TOKEN)
+                .unwrap();
+            let mut user = GraphMe {
+                company_name: None,
+                department: None,
+                display_name: None,
+                employee_id: None,
+                jwt_token_raw: None,
+                access_token: None,
+                ping_url: None,
+            };
+            debug!("JWT ID Token : {:#?}", id_token);
+            user.company_name = Some(id_token.to_owned().companyname.unwrap_or("".to_string()));
+            user.department = Some(id_token.to_owned().department.unwrap_or("".to_string()));
+            user.display_name = Some(id_token.name.to_owned().unwrap_or("".to_string()));
+            user.employee_id = Some("".to_string());
+            user.jwt_token_raw = Some(serde_json::to_string(&id_token.to_owned()).unwrap());
+            user.ping_url = Some(data.to_owned().ping_url.clone().unwrap());
+            if access_token.is_some() {
+                let access_token = access_token.unwrap();
+                user.access_token = Some(access_token.access_token().secret().to_string());
             }
+            let body = hb.render("profile", &user).unwrap();
+            HttpResponse::Ok().body(body)
         }
     };
-    //let body = hb.render("profile", &data).unwrap();
 }
 ///
 ///  profile page
@@ -485,7 +469,8 @@ async fn main() -> std::io::Result<()> {
     let client_id = std::env::var("CLIENT_ID").unwrap();
     let client_secret = std::env::var("CLIENT_SECRET").unwrap();
     let cookie_ssl = std::env::var("COOKIE_SSL").unwrap_or("false".to_string());
-    let ping_service_url = std::env::var("PING_SERVICE").unwrap_or("http://localhost:8081/ping".to_string());
+    let ping_service_url =
+        std::env::var("PING_SERVICE").unwrap_or("http://localhost:8081/ping".to_string());
 
     let use_cookie_ssl: bool = match cookie_ssl.as_str() {
         "false" => false,
@@ -504,7 +489,6 @@ async fn main() -> std::io::Result<()> {
     );
     config.ping_url = Some(ping_service_url);
 
-
     debug!("Get configuration from env complete");
     debug!("Cookie SSL : {}", use_cookie_ssl);
 
@@ -519,13 +503,12 @@ async fn main() -> std::io::Result<()> {
     );
 
     /*
-    let url_openid_config = format!(
-        r#"https://login.microsoftonline.com/{:1}/.well-known/openid-configuration?appid={:2}"#,
-        config.to_owned().tenant_id,
-        config.to_owned().client_id
-    );
-*/
-
+        let url_openid_config = format!(
+            r#"https://login.microsoftonline.com/{:1}/.well-known/openid-configuration?appid={:2}"#,
+            config.to_owned().tenant_id,
+            config.to_owned().client_id
+        );
+    */
 
     info!("url get azure ad configuration : {}", url_openid_config);
     let meta_azure_ad = reqwest::get(url_openid_config)
