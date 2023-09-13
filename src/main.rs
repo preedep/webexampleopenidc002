@@ -302,7 +302,7 @@ async fn login(
             }
             if response_type.eq("token") {
                 auth_req = auth_req.add_scope(Scope::new(
-                    "api://81dd62c1-4209-4f24-bd81-99912098a77f/Ping.All".to_string(),
+                    data.api_permission_scope.clone().unwrap(),
                 ));
             }
         }
@@ -482,6 +482,9 @@ async fn main() -> std::io::Result<()> {
     let ping_service_url =
         std::env::var("PING_SERVICE").unwrap_or("http://localhost:8081/ping".to_string());
 
+    let api_permission_scope = std::env::var("API_PERMISSION_SCOPE")
+        .unwrap_or("api://81dd62c1-4209-4f24-bd81-99912098a77f/Ping.All".to_string());
+
     let use_cookie_ssl: bool = match cookie_ssl.as_str() {
         "false" => false,
         "true" => true,
@@ -498,6 +501,7 @@ async fn main() -> std::io::Result<()> {
         client_secret,
     );
     config.ping_url = Some(ping_service_url);
+    config.api_permission_scope = Some(api_permission_scope);
 
     debug!("Get configuration from env complete");
     debug!("Cookie SSL : {}", use_cookie_ssl);
