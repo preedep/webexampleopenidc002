@@ -287,17 +287,27 @@ async fn login(
         //.add_scope(Scope::new("User.Read".to_string()))
         .set_pkce_challenge(pkce_challenge);
 
+
+    let response_type_lists = response_type.split(" ");
     let mut response_mode = "query";
     if response_type.eq("id_token") || response_type.eq("id_token token") {
+
         response_mode = "form_post";
-        auth_req = auth_req
-            .add_scope(Scope::new("profile".to_string()))
-            .add_scope(Scope::new("email".to_string()))
-            .add_scope(Scope::new(
-                "api://81dd62c1-4209-4f24-bd81-99912098a77f/Ping.All".to_string(),
-            ))
-            .add_extra_param("nonce", "1234234233232322222")
+        auth_req = auth_req.add_extra_param("nonce", "1234234233232322222");
+        for response_type in response_type_lists.into_iter() {
+            if response_type.eq("id_token") {
+                auth_req = auth_req
+                    .add_scope(Scope::new("profile".to_string()))
+                    .add_scope(Scope::new("email".to_string()));
+            }
+            if response_type.eq("token") {
+                auth_req = auth_req.add_scope(Scope::new(
+                    "api://81dd62c1-4209-4f24-bd81-99912098a77f/Ping.All".to_string(),
+                ));
+            }
+        }
     }
+
     auth_req = auth_req.add_extra_param("response_mode", response_mode);
     let res_type = ResponseType::new(response_type);
     auth_req = auth_req.set_response_type(&res_type);

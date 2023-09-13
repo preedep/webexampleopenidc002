@@ -35,10 +35,15 @@
                 "Authorization": "Bearer " + $('#access_token').val()
             },
             async: false,
-        }).done(function (data){
-                console.log(data);
-                document.getElementById("json_api_reponse").innerHTML = syntaxHighlight(JSON.stringify(data, null, 4));
-            });
+                success: function (data) {
+                    console.log(data);
+                    document.getElementById("json_api_reponse").innerHTML = syntaxHighlight(JSON.stringify(data, null, 4));
+                },
+                error: function (data){
+                    console.log(data.status + ':' + data.statusText,data.responseText);
+                    document.getElementById("json_api_reponse").innerHTML = data.status + ':' + data.statusText,data.responseText;
+                }
+        });
     });
     </script>
     ====== <br/><br/>
