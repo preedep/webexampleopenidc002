@@ -1,4 +1,19 @@
 <html lang="th">
+<head>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <style>
+        pre {outline: 1px solid #ccc; padding: 5px; margin: 5px; }
+        .string { color: green; }
+        .number { color: darkorange; }
+        .boolean { color: blue; }
+        .null { color: magenta; }
+        .key { color: red; }
+    </style>
+    <title>Profile </title>
+</head>
 <body>
     <h1>Welcome</h1>
     <h2>{{displayName}}</h2> <br/><br/>
@@ -6,10 +21,37 @@
     Department : {{department}} <br/>
     Company : {{companyName}} <br/><br/>
     ======= <br/><br/>
+    Access Token : {{access_token}} <br/><br/>
 
-    <div id="json">
+        <input id="access_token" type="hidden" name="access_token" value="{{access_token}}">
+        <input id="submitButton" type="button" value="Call API with Access Token" > <br/><br/>
 
-    </div>
+    <script type="text/javascript">
+        $('#submitButton').on('click',function(){
+            $.ajax({
+            url: "{{ping_url}}",
+            type: 'POST',
+            headers: {
+                "Authorization": "Bearer " + $('#access_token').val()
+            },
+            async: false,
+                success: function (data) {
+                    console.log(data);
+                    document.getElementById("json_api_reponse").innerHTML = syntaxHighlight(JSON.stringify(data, null, 4));
+                },
+                error: function (data){
+                    console.log(data.status + ':' + data.statusText,data.responseText);
+                    document.getElementById("json_api_reponse").innerHTML = data.status + ':' + data.statusText,data.responseText;
+                }
+        });
+    });
+    </script>
+    ====== <br/><br/>
+    <pre id="json_api_reponse"></pre>
+    ====== <br/><br/>
+    <pre id="json">
+
+    </pre>
     <script type="text/javascript">
 
         function decodeHTMLEntities(text) {
@@ -32,10 +74,31 @@
             return text;
         }
 
-        var data = decodeHTMLEntities('{{jwt_token_raw}}');
-        document.getElementById("json").innerHTML = JSON.stringify(JSON.parse(data), undefined, 2);
+        function syntaxHighlight(json) {
+            json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+                var cls = 'number';
+                if (/^"/.test(match)) {
+                    if (/:$/.test(match)) {
+                        cls = 'key';
+                    } else {
+                        cls = 'string';
+                    }
+                } else if (/true|false/.test(match)) {
+                    cls = 'boolean';
+                } else if (/null/.test(match)) {
+                    cls = 'null';
+                }
+                return '<span class="' + cls + '">' + match + '</span>';
+            });
+        }
+
+        var data = decodeHTMLEntities("{{jwt_token_raw}}");
+        console.log(data);
+        document.getElementById("json").innerHTML = syntaxHighlight(JSON.stringify(JSON.parse(data), null, 4));
 
     </script>
+
     <br/>
     <a href="/logout">Logout</a>
 </body>

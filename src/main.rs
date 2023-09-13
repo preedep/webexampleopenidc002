@@ -1,3 +1,5 @@
+mod entities;
+
 use actix_files::Files;
 use actix_session::config::PersistentSession;
 use actix_session::storage::RedisActorSessionStore;
@@ -6,21 +8,24 @@ use actix_web::middleware::Logger;
 use actix_web::web::{Data, Redirect};
 use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
 
+use crate::entities::{
+    Config, ErrorInfo, GraphMe, JwtPayloadIDToken, LoginQueryString, MyAppError, MyAppResult,
+    OpenIDConfigurationV2, ResponseAuthorized,
+};
 use actix_web::cookie::time::Duration;
 use actix_web::cookie::SameSite;
 use handlebars::Handlebars;
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use log::{debug, error, info};
-use oauth2::basic::{BasicClient, BasicTokenResponse};
+use oauth2::basic::{BasicClient, BasicTokenResponse, BasicTokenType};
 use oauth2::reqwest::async_http_client;
 use oauth2::{
-    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, PkceCodeChallenge,
-    PkceCodeVerifier, RedirectUrl, ResponseType, Scope, TokenResponse, TokenUrl,
+    AccessToken, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
+    EmptyExtraTokenFields, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, ResponseType, Scope,
+    TokenResponse, TokenUrl,
 };
 use reqwest::StatusCode;
-use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::fmt;
 
 const SESSION_KEY_ID_TOKEN: &str = "ID_TOKEN_KEY";
 const SESSION_KEY_ERROR: &str = "ERROR_KEY";
@@ -28,213 +33,6 @@ const SESSION_KEY_ACCESS_TOKEN: &str = "ACCESS_TOKEN";
 
 const PAGE_PROFILE: &str = "/profile";
 const PAGE_ERROR: &str = "/error";
-///
-/// Open ID Configuration
-///
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OpenIDConfigurationV2 {
-    #[serde(rename = "token_endpoint")]
-    pub token_endpoint: Option<String>,
-    #[serde(rename = "token_endpoint_auth_methods_supported")]
-    pub token_endpoint_auth_methods_supported: Option<Vec<String>>,
-    #[serde(rename = "jwks_uri")]
-    pub jwks_uri: Option<String>,
-    #[serde(rename = "response_modes_supported")]
-    pub response_modes_supported: Option<Vec<String>>,
-    #[serde(rename = "subject_types_supported")]
-    pub subject_types_supported: Option<Vec<String>>,
-    #[serde(rename = "id_token_signing_alg_values_supported")]
-    pub id_token_signing_alg_values_supported: Option<Vec<String>>,
-    #[serde(rename = "response_types_supported")]
-    pub response_types_supported: Option<Vec<String>>,
-    #[serde(rename = "scopes_supported")]
-    pub scopes_supported: Option<Vec<String>>,
-    pub issuer: Option<String>,
-    #[serde(rename = "request_uri_parameter_supported")]
-    pub request_uri_parameter_supported: Option<bool>,
-    #[serde(rename = "userinfo_endpoint")]
-    pub userinfo_endpoint: Option<String>,
-    #[serde(rename = "authorization_endpoint")]
-    pub authorization_endpoint: Option<String>,
-    #[serde(rename = "device_authorization_endpoint")]
-    pub device_authorization_endpoint: Option<String>,
-    #[serde(rename = "http_logout_supported")]
-    pub http_logout_supported: Option<bool>,
-    #[serde(rename = "frontchannel_logout_supported")]
-    pub frontchannel_logout_supported: Option<bool>,
-    #[serde(rename = "end_session_endpoint")]
-    pub end_session_endpoint: Option<String>,
-    #[serde(rename = "claims_supported")]
-    pub claims_supported: Option<Vec<String>>,
-    #[serde(rename = "kerberos_endpoint")]
-    pub kerberos_endpoint: Option<String>,
-    #[serde(rename = "tenant_region_scope")]
-    pub tenant_region_scope: Option<String>,
-    #[serde(rename = "cloud_instance_name")]
-    pub cloud_instance_name: Option<String>,
-    #[serde(rename = "cloud_graph_host_name")]
-    pub cloud_graph_host_name: Option<String>,
-    #[serde(rename = "msgraph_host")]
-    pub msgraph_host: Option<String>,
-    #[serde(rename = "rbac_url")]
-    pub rbac_url: Option<String>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct JwtPayloadIDToken {
-    pub aud: Option<String>,
-    pub iss: Option<String>,
-    pub iat: Option<i64>,
-    pub nbf: Option<i64>,
-    pub exp: Option<i64>,
-    pub acct: Option<i64>,
-    pub acrs: Option<Vec<String>>,
-    pub aio: Option<String>,
-    #[serde(rename = "auth_time")]
-    pub auth_time: Option<i64>,
-    pub ctry: Option<String>,
-    pub email: Option<String>,
-    #[serde(rename = "family_name")]
-    pub family_name: Option<String>,
-    #[serde(rename = "given_name")]
-    pub given_name: Option<String>,
-    pub idp: Option<String>,
-    pub ipaddr: Option<String>,
-    #[serde(rename = "login_hint")]
-    pub login_hint: Option<String>,
-    pub name: Option<String>,
-    pub nonce: Option<String>,
-    pub oid: Option<String>,
-    #[serde(rename = "preferred_username")]
-    pub preferred_username: Option<String>,
-    pub rh: Option<String>,
-    pub sid: Option<String>,
-    pub sub: Option<String>,
-    #[serde(rename = "tenant_ctry")]
-    pub tenant_ctry: Option<String>,
-    #[serde(rename = "tenant_region_scope")]
-    pub tenant_region_scope: Option<String>,
-    pub tid: Option<String>,
-    pub uti: Option<String>,
-    pub ver: Option<String>,
-    #[serde(rename = "xms_pl")]
-    pub xms_pl: Option<String>,
-    #[serde(rename = "xms_tpl")]
-    pub xms_tpl: Option<String>,
-    pub department: Option<String>,
-    pub companyname: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct ErrorInfo {
-    #[serde(with = "http_serde::status_code")]
-    http_status_code: StatusCode,
-    http_status_message: Option<String>,
-    error_message: Option<String>,
-}
-
-impl ErrorInfo {
-    fn new(http_status_code: StatusCode) -> Self {
-        ErrorInfo {
-            http_status_code,
-            http_status_message: None,
-            error_message: None,
-        }
-    }
-    fn set_error_message(&mut self, error_message: String) -> &Self {
-        self.error_message = Some(error_message);
-        self
-    }
-    fn get_http_status_message(&self) -> String {
-        self.http_status_code.to_string()
-    }
-}
-#[derive(Debug, Clone, Deserialize, Serialize)]
-struct GraphMe {
-    #[serde(rename = "companyName")]
-    company_name: String,
-    #[serde(rename = "department")]
-    department: String,
-    #[serde(rename = "displayName")]
-    display_name: String,
-    #[serde(rename = "employeeId")]
-    employee_id: String,
-    #[serde(rename = "jwt_token_raw")]
-    jwt_token_raw: Option<String>,
-}
-#[derive(Debug, Clone)]
-struct Config {
-    redis_url: String,
-    redis_auth_key: String,
-    tenant_id: String,
-    default_page: String,
-    redirect: String,
-    client_id: String,
-    client_secret: String,
-    open_id_config: Option<OpenIDConfigurationV2>,
-}
-
-impl Config {
-    fn new(
-        redis_url: String,
-        redis_auth_key: String,
-        tenant_id: String,
-        default_page: String,
-        redirect: String,
-        client_id: String,
-        client_secret: String,
-    ) -> Self {
-        Config {
-            redis_url,
-            redis_auth_key,
-            tenant_id,
-            default_page,
-            redirect,
-            client_id,
-            client_secret,
-            open_id_config: None,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct LoginQueryString {
-    #[serde(rename(deserialize = "response_type"))]
-    response_type: Option<String>,
-}
-#[derive(Debug, Deserialize)]
-pub struct ResponseAuthorized {
-    #[serde(rename(deserialize = "code"))]
-    code: Option<String>,
-    #[serde(rename(deserialize = "session_state"))]
-    session_state: Option<String>,
-    #[serde(rename(deserialize = "state"))]
-    state: Option<String>,
-    #[serde(rename(deserialize = "id_token"))]
-    id_token: Option<String>,
-    #[serde(rename(deserialize = "error"))]
-    error: Option<String>,
-    #[serde(rename(deserialize = "error_description"))]
-    error_description: Option<String>,
-}
-
-type MyAppResult<T> = std::result::Result<T, MyAppError>;
-#[derive(Debug, Clone, Serialize)]
-struct MyAppError {
-    error_message: String,
-}
-impl MyAppError {
-    fn new(error_message: String) -> Self {
-        MyAppError { error_message }
-    }
-}
-impl fmt::Display for MyAppError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "App Error {}", self.error_message)
-    }
-}
 
 ///
 /// Function get code verifier
@@ -332,6 +130,20 @@ async fn callback(
                 let data = decode::<JwtPayloadIDToken>(jwt_id_token.as_str(), &key, &validation);
                 match session.insert(SESSION_KEY_ID_TOKEN, data.unwrap().claims) {
                     Ok(_) => {
+                        if params.access_token.is_some() {
+                            session
+                                .insert(
+                                    SESSION_KEY_ACCESS_TOKEN,
+                                    BasicTokenResponse::new(
+                                        AccessToken::new(params.access_token.unwrap()),
+                                        BasicTokenType::Bearer,
+                                        EmptyExtraTokenFields {},
+                                    ),
+                                )
+                                .unwrap();
+                            debug!("Insert ACCESS_KEY Successful ");
+                        }
+
                         debug!("Insert ID_TOKEN_KEY Successful ");
                         Redirect::to(PAGE_PROFILE).permanent()
                     }
@@ -368,11 +180,22 @@ async fn callback(
                 // Set the URL the user will be redirected to after the authorization process.
                 .set_redirect_uri(RedirectUrl::new(data.redirect.clone()).unwrap());
 
+                /*
+                 let mut scopes: Vec<Scope> = Vec::new();
+                 scopes.push(Scope::new("openid".to_string()));
+                 scopes.push(Scope::new("email".to_string()));
+                 scopes.push(Scope::new("profile".to_string()));
+                 scopes.push(Scope::new("User.Read".to_string()));
+                 scopes.push(Scope::new("api://81dd62c1-4209-4f24-bd81-99912098a77f/ping.message".to_string()));
+                let scope =  scopes.iter().map(|s| s.to_string()).collect::<Vec<_>>()
+                     .join(" ");
+                 */
+                //add("email").add("User.Read").add("api://81dd62c1-4209-4f24-bd81-99912098a77f/ping.message");
                 info!("request access token ");
                 let token_result = client
                     .exchange_code(AuthorizationCode::new(params.code.unwrap()))
                     .add_extra_param("code_verifier", verifier.unwrap().secret())
-                    //.request(http_client);
+                    //.add_extra_param("scope",scope)
                     .request_async(async_http_client)
                     .await;
                 debug!("token result > {:#?}", token_result);
@@ -460,16 +283,31 @@ async fn login(
         .authorize_url(CsrfToken::new_random)
         // Set the desired scopes.
         .add_scope(Scope::new("openid".to_string()))
-        .add_scope(Scope::new("profile".to_string()))
-        .add_scope(Scope::new("email".to_string()))
-        .add_scope(Scope::new("User.Read".to_string()))
+        .add_scope(Scope::new("offline_access".to_string()))
+        //.add_scope(Scope::new("User.Read".to_string()))
         .set_pkce_challenge(pkce_challenge);
 
+
+    let response_type_lists = response_type.split(" ");
     let mut response_mode = "query";
-    if response_type.eq("id_token") {
+    if response_type.eq("id_token") || response_type.eq("id_token token") {
+
         response_mode = "form_post";
-        auth_req = auth_req.add_extra_param("nonce", "1234234233232322222")
+        auth_req = auth_req.add_extra_param("nonce", "1234234233232322222");
+        for response_type in response_type_lists.into_iter() {
+            if response_type.eq("id_token") {
+                auth_req = auth_req
+                    .add_scope(Scope::new("profile".to_string()))
+                    .add_scope(Scope::new("email".to_string()));
+            }
+            if response_type.eq("token") {
+                auth_req = auth_req.add_scope(Scope::new(
+                    "api://81dd62c1-4209-4f24-bd81-99912098a77f/Ping.All".to_string(),
+                ));
+            }
+        }
     }
+
     auth_req = auth_req.add_extra_param("response_mode", response_mode);
     let res_type = ResponseType::new(response_type);
     auth_req = auth_req.set_response_type(&res_type);
@@ -528,33 +366,21 @@ async fn profile(
     data: web::Data<Config>,
     hb: web::Data<Handlebars<'_>>,
 ) -> impl Responder {
-    let basic_token = session
-        .get::<BasicTokenResponse>(SESSION_KEY_ACCESS_TOKEN)
+    let id_token = session
+        .get::<JwtPayloadIDToken>(SESSION_KEY_ID_TOKEN)
         .unwrap();
-    return match basic_token {
+    return match id_token {
         None => {
-            let token = session
-                .get::<JwtPayloadIDToken>(SESSION_KEY_ID_TOKEN)
+            //auth code flow
+            let access_token = session
+                .get::<BasicTokenResponse>(SESSION_KEY_ACCESS_TOKEN)
                 .unwrap();
-            match token {
-                None => HttpResponse::InternalServerError().finish(),
-                Some(jwt) => {
-                    debug!("JWT ID Token : {:#?}", jwt);
+            //if access_token.is_some()
 
-                    let mut user = GraphMe {
-                        company_name: jwt.to_owned().companyname.unwrap_or("".to_string()),
-                        department: jwt.to_owned().department.unwrap_or("".to_string()),
-                        display_name: jwt.name.to_owned().unwrap_or("".to_string()),
-                        employee_id: "".to_string(),
-                        jwt_token_raw: Some(serde_json::to_string_pretty(&jwt.to_owned()).unwrap()),
-                    };
-
-                    let body = hb.render("profile", &user).unwrap();
-                    HttpResponse::Ok().body(body)
-                }
-            }
-        }
-        Some(token) => {
+            let access_token = access_token.unwrap();
+            //
+            //  Get Access Token
+            //
             let url = data.open_id_config.clone().unwrap().msgraph_host.unwrap();
             let url = format!(
                 "https://{}/v1.0/me?$select=displayName,department,employeeId,companyName",
@@ -565,23 +391,48 @@ async fn profile(
                 .get(url)
                 .header(
                     "Authorization",
-                    format!("Bearer {}", token.access_token().secret()),
+                    format!("Bearer {}", access_token.access_token().secret()),
                 )
                 .header("Content-Type", "application/json")
                 .send()
                 .await;
 
             let res_me = res_user_info.unwrap().json::<GraphMe>().await;
-            match res_me {
-                Ok(user) => {
-                    let body = hb.render("profile", &user).unwrap();
-                    HttpResponse::Ok().body(body)
-                }
-                Err(e) => HttpResponse::InternalServerError().body(format!("{}", e)),
+            let mut user = res_me.unwrap();
+            user.ping_url = Some(data.to_owned().ping_url.clone().unwrap());
+            user.access_token = Some(access_token.access_token().secret().to_string());
+            user.jwt_token_raw = Some(serde_json::to_string(&user.to_owned()).unwrap());
+            let body = hb.render("profile", &user).unwrap();
+            HttpResponse::Ok().body(body)
+        }
+        Some(id_token) => {
+            let access_token = session
+                .get::<BasicTokenResponse>(SESSION_KEY_ACCESS_TOKEN)
+                .unwrap();
+            let mut user = GraphMe {
+                company_name: None,
+                department: None,
+                display_name: None,
+                employee_id: None,
+                jwt_token_raw: None,
+                access_token: None,
+                ping_url: None,
+            };
+            debug!("JWT ID Token : {:#?}", id_token);
+            user.company_name = Some(id_token.to_owned().companyname.unwrap_or("".to_string()));
+            user.department = Some(id_token.to_owned().department.unwrap_or("".to_string()));
+            user.display_name = Some(id_token.name.to_owned().unwrap_or("".to_string()));
+            user.employee_id = Some("".to_string());
+            user.jwt_token_raw = Some(serde_json::to_string(&id_token.to_owned()).unwrap());
+            user.ping_url = Some(data.to_owned().ping_url.clone().unwrap());
+            if access_token.is_some() {
+                let access_token = access_token.unwrap();
+                user.access_token = Some(access_token.access_token().secret().to_string());
             }
+            let body = hb.render("profile", &user).unwrap();
+            HttpResponse::Ok().body(body)
         }
     };
-    //let body = hb.render("profile", &data).unwrap();
 }
 ///
 ///  profile page
@@ -628,6 +479,8 @@ async fn main() -> std::io::Result<()> {
     let client_id = std::env::var("CLIENT_ID").unwrap();
     let client_secret = std::env::var("CLIENT_SECRET").unwrap();
     let cookie_ssl = std::env::var("COOKIE_SSL").unwrap_or("false".to_string());
+    let ping_service_url =
+        std::env::var("PING_SERVICE").unwrap_or("http://localhost:8081/ping".to_string());
 
     let use_cookie_ssl: bool = match cookie_ssl.as_str() {
         "false" => false,
@@ -644,6 +497,7 @@ async fn main() -> std::io::Result<()> {
         client_id,
         client_secret,
     );
+    config.ping_url = Some(ping_service_url);
 
     debug!("Get configuration from env complete");
     debug!("Cookie SSL : {}", use_cookie_ssl);
@@ -651,13 +505,22 @@ async fn main() -> std::io::Result<()> {
     //
     // Get azure ad meta data
     //
+
     let url_openid_config = format!(
         r#"https://login.microsoftonline.com/{:1}/v2.0/.well-known/openid-configuration?appid={:2}"#,
         config.to_owned().tenant_id,
         config.to_owned().client_id
     );
 
-    info!("url validation : {}", url_openid_config);
+    /*
+        let url_openid_config = format!(
+            r#"https://login.microsoftonline.com/{:1}/.well-known/openid-configuration?appid={:2}"#,
+            config.to_owned().tenant_id,
+            config.to_owned().client_id
+        );
+    */
+
+    info!("url get azure ad configuration : {}", url_openid_config);
     let meta_azure_ad = reqwest::get(url_openid_config)
         .await
         .unwrap()

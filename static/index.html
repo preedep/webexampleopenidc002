@@ -1,12 +1,58 @@
 <html lang="th">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <style>
+        body,
+        html {
+            margin: 0;
+            font-family: sans-serif;
+        }
+
+        .container {
+            display: flex;
+            gap: 0.625%;
+        }
+
+        a {
+            flex: 1;
+            text-decoration: none;
+            outline: none;
+            text-align: center;
+            line-height: 3;
+            color: black;
+        }
+
+        a:link,
+        a:visited,
+        a:focus {
+            background: palegoldenrod;
+            color: black;
+        }
+
+        a:hover {
+            background: orange;
+        }
+
+        a:active {
+            background: darkred;
+            color: white;
+        }
+    </style>
+    <title></title>
+
+</head>
 <body>
-<h1>Test Azure AD V2.7.12</h1> <br/>
+<h1>Test Simple Application Authentication with Azure AD V2.7.38 - Developed By นิคอฟปีดาเยฟ (c) 2023 </h1> <br/>
 
 Hi {{Name}} <br/><br/>
 
-<a href="/login?response_type=code">Login with Azure AD (Grant Type = Auth Code )</a><br/><br/>
+<a href="/login?response_type=code">Login with Azure AD (Grant Type = Auth Code + PKCE )</a><br/><br/>
 
-<a href="/login?response_type=id_token">Login with Azure AD (ID Token - OpenID Connect)</a><br/><br/>
+<a href="/login?response_type=id_token">Login with Azure AD (ID Token - OpenID Connect  for case SSO )</a><br/><br/>
+
+<a href="/login?response_type=id_token token">Login with Azure AD (ID Token - OpenID Connect + Access Token (Implicit Flow)  for case SSO )</a><br/><br/>
+
 
 <a href="/logout">Logout</a>
 </body>
