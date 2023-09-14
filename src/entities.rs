@@ -163,7 +163,6 @@ pub struct GraphMe {
     pub access_token: Option<String>,
     #[serde(rename = "ping_url")]
     pub ping_url: Option<String>,
-
 }
 #[derive(Debug, Clone)]
 pub struct Config {

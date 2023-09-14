@@ -1,6 +1,5 @@
 mod entities;
 
-use std::fmt::Write;
 use actix_files::Files;
 use actix_session::config::PersistentSession;
 use actix_session::storage::RedisActorSessionStore;
@@ -8,6 +7,7 @@ use actix_session::{Session, SessionMiddleware};
 use actix_web::middleware::Logger;
 use actix_web::web::{Data, Redirect};
 use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
+use std::fmt::Write;
 
 use crate::entities::{
     Config, ErrorInfo, GraphMe, JwtPayloadIDToken, LoginQueryString, MyAppError, MyAppResult,
@@ -15,7 +15,9 @@ use crate::entities::{
 };
 use actix_web::cookie::time::Duration;
 use actix_web::cookie::SameSite;
-use handlebars::{Context, Handlebars, Helper, HelperResult, JsonRender, Output, RenderContext, RenderError};
+use handlebars::{
+    Context, Handlebars, Helper, HelperResult, JsonRender, Output, RenderContext, RenderError,
+};
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use log::{debug, error, info};
 use oauth2::basic::{BasicClient, BasicTokenResponse, BasicTokenType};
@@ -181,7 +183,6 @@ async fn callback(
                 // Set the URL the user will be redirected to after the authorization process.
                 .set_redirect_uri(RedirectUrl::new(data.redirect.clone()).unwrap());
 
-
                 //add("email").add("User.Read").add("api://81dd62c1-4209-4f24-bd81-99912098a77f/ping.message");
                 info!("request access token ");
                 let token_result = client
@@ -279,11 +280,9 @@ async fn login(
         //.add_scope(Scope::new("User.Read".to_string()))
         .set_pkce_challenge(pkce_challenge);
 
-
     let response_type_lists = response_type.split(" ");
     let mut response_mode = "query";
     if response_type.eq("id_token") || response_type.eq("id_token token") {
-
         response_mode = "form_post";
         auth_req = auth_req.add_extra_param("nonce", "1234234233232322222");
         for response_type in response_type_lists.into_iter() {
@@ -293,9 +292,8 @@ async fn login(
                     .add_scope(Scope::new("email".to_string()));
             }
             if response_type.eq("token") {
-                auth_req = auth_req.add_scope(Scope::new(
-                    data.api_permission_scope.clone().unwrap(),
-                ));
+                auth_req =
+                    auth_req.add_scope(Scope::new(data.api_permission_scope.clone().unwrap()));
             }
         }
     }
