@@ -23,8 +23,13 @@
     ======= <br/><br/>
     Access Token : {{access_token}} <br/><br/>
 
-        <input id="access_token" type="hidden" name="access_token" value="{{access_token}}">
-        <input id="submitButton" type="button" value="Call Ping > [{{ping_url}}]  with Access Token" > <br/><br/>
+    {{access_token_validator  access_token ping_url}}
+    <!--
+    <input id="access_token" type="hidden" name="access_token" value="{{access_token}}">
+    <input id="submitButton" type="button" value="Call Ping > [{{ping_url}}]  with Access Token" >
+    -->
+    <br/><br/>
+
 
     <script type="text/javascript">
         $('#submitButton').on('click',function(){
