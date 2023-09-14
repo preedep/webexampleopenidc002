@@ -507,14 +507,6 @@ async fn main() -> std::io::Result<()> {
         config.to_owned().client_id
     );
 
-    /*
-        let url_openid_config = format!(
-            r#"https://login.microsoftonline.com/{:1}/.well-known/openid-configuration?appid={:2}"#,
-            config.to_owned().tenant_id,
-            config.to_owned().client_id
-        );
-    */
-
     info!("url get azure ad configuration : {}", url_openid_config);
     let meta_azure_ad = reqwest::get(url_openid_config)
         .await
