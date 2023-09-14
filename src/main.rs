@@ -551,26 +551,7 @@ async fn main() -> std::io::Result<()> {
                                    //debug!("render param > {},",param.value().render());
 
                                    let param_access_token = h.param(0).ok_or(RenderError::new("param not found")).unwrap();
-                                   /*
-                                   match param_access_token.value()["access_token"] {
-                                       None => {
-                                           debug!("no have access token");
-                                           out.write("Don't have access token")?;
-                                       }
-                                       Some(token) => {
-                                           debug!("have access token");
-                                           let param_ping_url = h.param(1)
-                                               .ok_or(RenderError::new("param not found"))?;
-                                           let out_helper = format!(r#"
-                                                            <input id="access_token" type="hidden" name="access_token" value="{}">
-                                                             <input id="submitButton" type="button" value="Call Ping > [{}]  with Access Token" > "#,
-                                                                    token,
-                                                                    param_ping_url.value()["ping_url"].unwrap()
-                                           );
-                                           out.write(out_helper.as_str())?;
 
-                                       }
-                                   }*/
                                    let access_token = param_access_token.render();
                                    if access_token.is_empty() {
                                        //debug!("No Access Token");
