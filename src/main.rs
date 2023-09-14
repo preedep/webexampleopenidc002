@@ -7,6 +7,7 @@ use actix_session::{Session, SessionMiddleware};
 use actix_web::middleware::Logger;
 use actix_web::web::{Data, Redirect};
 use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
+use std::fmt::Write;
 
 use crate::entities::{
     Config, ErrorInfo, GraphMe, JwtPayloadIDToken, LoginQueryString, MyAppError, MyAppResult,
@@ -14,7 +15,9 @@ use crate::entities::{
 };
 use actix_web::cookie::time::Duration;
 use actix_web::cookie::SameSite;
-use handlebars::Handlebars;
+use handlebars::{
+    Context, Handlebars, Helper, HelperResult, JsonRender, Output, RenderContext, RenderError,
+};
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use log::{debug, error, info};
 use oauth2::basic::{BasicClient, BasicTokenResponse, BasicTokenType};
@@ -25,7 +28,7 @@ use oauth2::{
     TokenResponse, TokenUrl,
 };
 use reqwest::StatusCode;
-use serde_json::json;
+use serde_json::{json};
 
 const SESSION_KEY_ID_TOKEN: &str = "ID_TOKEN_KEY";
 const SESSION_KEY_ERROR: &str = "ERROR_KEY";
@@ -180,16 +183,6 @@ async fn callback(
                 // Set the URL the user will be redirected to after the authorization process.
                 .set_redirect_uri(RedirectUrl::new(data.redirect.clone()).unwrap());
 
-                /*
-                 let mut scopes: Vec<Scope> = Vec::new();
-                 scopes.push(Scope::new("openid".to_string()));
-                 scopes.push(Scope::new("email".to_string()));
-                 scopes.push(Scope::new("profile".to_string()));
-                 scopes.push(Scope::new("User.Read".to_string()));
-                 scopes.push(Scope::new("api://81dd62c1-4209-4f24-bd81-99912098a77f/ping.message".to_string()));
-                let scope =  scopes.iter().map(|s| s.to_string()).collect::<Vec<_>>()
-                     .join(" ");
-                 */
                 //add("email").add("User.Read").add("api://81dd62c1-4209-4f24-bd81-99912098a77f/ping.message");
                 info!("request access token ");
                 let token_result = client
@@ -287,11 +280,9 @@ async fn login(
         //.add_scope(Scope::new("User.Read".to_string()))
         .set_pkce_challenge(pkce_challenge);
 
-
     let response_type_lists = response_type.split(" ");
     let mut response_mode = "query";
     if response_type.eq("id_token") || response_type.eq("id_token token") {
-
         response_mode = "form_post";
         auth_req = auth_req.add_extra_param("nonce", "1234234233232322222");
         for response_type in response_type_lists.into_iter() {
@@ -301,9 +292,8 @@ async fn login(
                     .add_scope(Scope::new("email".to_string()));
             }
             if response_type.eq("token") {
-                auth_req = auth_req.add_scope(Scope::new(
-                    "api://81dd62c1-4209-4f24-bd81-99912098a77f/Ping.All".to_string(),
-                ));
+                auth_req =
+                    auth_req.add_scope(Scope::new(data.api_permission_scope.clone().unwrap()));
             }
         }
     }
@@ -375,12 +365,11 @@ async fn profile(
             let access_token = session
                 .get::<BasicTokenResponse>(SESSION_KEY_ACCESS_TOKEN)
                 .unwrap();
-            //if access_token.is_some()
-
-            let access_token = access_token.unwrap();
             //
             //  Get Access Token
             //
+            let access_token = access_token.unwrap();
+
             let url = data.open_id_config.clone().unwrap().msgraph_host.unwrap();
             let url = format!(
                 "https://{}/v1.0/me?$select=displayName,department,employeeId,companyName",
@@ -482,6 +471,9 @@ async fn main() -> std::io::Result<()> {
     let ping_service_url =
         std::env::var("PING_SERVICE").unwrap_or("http://localhost:8081/ping".to_string());
 
+    let api_permission_scope = std::env::var("API_PERMISSION_SCOPE")
+        .unwrap_or("api://81dd62c1-4209-4f24-bd81-99912098a77f/Ping.All".to_string());
+
     let use_cookie_ssl: bool = match cookie_ssl.as_str() {
         "false" => false,
         "true" => true,
@@ -498,6 +490,7 @@ async fn main() -> std::io::Result<()> {
         client_secret,
     );
     config.ping_url = Some(ping_service_url);
+    config.api_permission_scope = Some(api_permission_scope);
 
     debug!("Get configuration from env complete");
     debug!("Cookie SSL : {}", use_cookie_ssl);
@@ -511,14 +504,6 @@ async fn main() -> std::io::Result<()> {
         config.to_owned().tenant_id,
         config.to_owned().client_id
     );
-
-    /*
-        let url_openid_config = format!(
-            r#"https://login.microsoftonline.com/{:1}/.well-known/openid-configuration?appid={:2}"#,
-            config.to_owned().tenant_id,
-            config.to_owned().client_id
-        );
-    */
 
     info!("url get azure ad configuration : {}", url_openid_config);
     let meta_azure_ad = reqwest::get(url_openid_config)
@@ -546,6 +531,38 @@ async fn main() -> std::io::Result<()> {
     hbars
         .register_templates_directory(".html", "./static/")
         .unwrap();
+
+    hbars.register_helper("access_token_validator",
+                               Box::new(|h: &Helper, r: &Handlebars, _: &Context, rc: &mut RenderContext, out: &mut dyn Output| -> HelperResult {
+                                   //let param = h.param(0).ok_or(RenderError::new("param not found"))?;
+                                   //debug!("access_token_validator = {:?} , with ping_url = {:?}",param,param_ping_url);
+                                   //out.write("3rd helper: ")?;
+                                   //out.write(param.value().render().as_ref())?;
+                                   //debug!("render param > {},",param.value().render());
+
+                                   let param_access_token = h.param(0).ok_or(RenderError::new("param not found")).unwrap();
+
+                                   let access_token = param_access_token.render();
+                                   if access_token.is_empty() {
+                                       //debug!("No Access Token");
+                                       debug!("no have access token");
+                                       out.write("Don't have access token")?;
+                                   }else{
+                                       debug!("Have Access Token");
+                                       let param_ping_url = h.param(1)
+                                           .ok_or(RenderError::new("param not found"))?;
+                                       let out_helper = format!(r#"
+                                                            <input id="access_token" type="hidden" name="access_token" value="{}">
+                                                             <input id="submitButton" type="button" value="Call Ping > [{}]  with Access Token" > "#,
+                                                                access_token.clone(),
+                                                                param_ping_url.render()
+                                       );
+                                       out.write(out_helper.as_str())?;
+
+                                   }
+
+                                   Ok(())
+                               }));
 
     HttpServer::new(move || {
         App::new()

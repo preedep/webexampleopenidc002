@@ -176,6 +176,7 @@ pub struct Config {
     pub open_id_config: Option<OpenIDConfigurationV2>,
     pub jwks: Option<JWKS>,
     pub ping_url: Option<String>,
+    pub api_permission_scope: Option<String>,
 }
 
 impl Config {
@@ -199,6 +200,7 @@ impl Config {
             open_id_config: None,
             jwks: None,
             ping_url: None,
+            api_permission_scope: None,
         }
     }
 }
