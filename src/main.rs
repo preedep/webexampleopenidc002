@@ -28,7 +28,7 @@ use oauth2::{
     TokenResponse, TokenUrl,
 };
 use reqwest::StatusCode;
-use serde_json::{json};
+use serde_json::json;
 
 const SESSION_KEY_ID_TOKEN: &str = "ID_TOKEN_KEY";
 const SESSION_KEY_ERROR: &str = "ERROR_KEY";
