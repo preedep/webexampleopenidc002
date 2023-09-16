@@ -249,7 +249,6 @@ async fn login(
     {
         error!("Response type = {} Not support", response_type.clone());
     }
-
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
     debug!(
         "PKCE challenge : {:?} \r\n ,\
@@ -297,7 +296,6 @@ async fn login(
             }
         }
     }
-
     auth_req = auth_req.add_extra_param("response_mode", response_mode);
     let res_type = ResponseType::new(response_type);
     auth_req = auth_req.set_response_type(&res_type);
@@ -389,7 +387,8 @@ async fn profile(
             let res_me = res_user_info.unwrap().json::<GraphMe>().await;
             let mut user = res_me.unwrap();
             user.ping_url = Some(data.to_owned().ping_url.clone().unwrap());
-            user.access_token = Some(access_token.access_token().secret().to_string());
+            // This access token for Graph API requests
+            user.access_token = None;//Some(access_token.access_token().secret().to_string());
             user.jwt_token_raw = Some(serde_json::to_string(&user.to_owned()).unwrap());
             let body = hb.render("profile", &user).unwrap();
             HttpResponse::Ok().body(body)
