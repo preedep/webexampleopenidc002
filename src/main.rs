@@ -606,7 +606,7 @@ async fn main() -> std::io::Result<()> {
                     .route(web::post().to(error_display)),
             )
             .route("/logout", web::get().to(logout))
-            .service(Files::new("/static", "static").prefer_utf8(true))
+            .service(Files::new("static", "./static").prefer_utf8(true))
     })
     // .keep_alive(KeepAlive::from(std::time::Duration::from_millis(10 * 1000)))
     .workers(20)
