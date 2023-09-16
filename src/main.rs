@@ -552,8 +552,11 @@ async fn main() -> std::io::Result<()> {
                                        let param_ping_url = h.param(1)
                                            .ok_or(RenderError::new("param not found"))?;
                                        let out_helper = format!(r#"
-                                                            <input id="access_token" type="hidden" name="access_token" value="{}">
-                                                             <input id="submitButton" type="button" value="Call Ping > [{}]  with Access Token" > "#,
+                                                             <input id="access_token" type="hidden" name="access_token" value="{}">
+                                                             <input id="submitButton" class="btn-secondary" type="button" value="Call Ping > [{}]  with Access Token" > <br/>
+                                                              <pre id="json_api_reponse"></pre>
+
+                                                             "#,
                                                                 access_token.clone(),
                                                                 param_ping_url.render()
                                        );
