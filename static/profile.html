@@ -1,4 +1,4 @@
-<html lang="th">
+<html lang="th" xmlns="http://www.w3.org/1999/html">
 <head>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
 
@@ -68,8 +68,12 @@
             <h1 class="page-header-title">
                 <div class="page-header-icon"><i data-feather="file"></i></div>
                 <span>Profile - Azure AD , Welcome {{displayName}}</span>
+
             </h1>
-            <div class="page-header-subtitle">Azure AD - User - Properties</div>
+            <div class="page-header-subtitle">
+                Azure AD - User - Properties <br/><br/>
+                <a class="btn btn-red btn-sm" type="button" href="/logout">Logout</a>
+            </div>
         </div>
     </div>
 </div>
@@ -184,6 +188,8 @@
     </script>
 
     <br/>
+<!--
     <a href="/logout">Logout</a>
+    -->
 </body>
 </html>
