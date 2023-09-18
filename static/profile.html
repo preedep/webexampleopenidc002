@@ -85,7 +85,7 @@
 <div class="card">
     <div class="card-header">Access Token for MyAPI (Implicit case Only)</div>
     <div class="card-body">
-        Access Token : {{access_token}} <br/>
+        Access Token : {{access_token}} <br/><br/>
         {{access_token_validator  access_token ping_url}}<br/>
         <div id="overlay">
             <div class="cv-spinner">
@@ -171,10 +171,16 @@
             });
         }
 
-        var data = decodeHTMLEntities("{{jwt_token_raw}}");
-        console.log(data);
-        document.getElementById("json").innerHTML = syntaxHighlight(JSON.stringify(JSON.parse(data), null, 4));
+        var jwt_id_token_data = decodeHTMLEntities("{{jwt_token_raw}}");
+        var jwt_access_token_data = decodeHTMLEntities("{{jwt_access_token_raw}}");
 
+        console.log(jwt_id_token_data);
+        console.log(jwt_access_token_data);
+        document.getElementById("json").innerHTML = syntaxHighlight(JSON.stringify(JSON.parse(jwt_id_token_data), null, 4));
+        if (typeof jwt_access_token_data === 'string' && jwt_access_token_data.length > 0) {
+            //console.log(jwt_access_token_data);
+            document.getElementById("json_access_token").innerHTML = syntaxHighlight(JSON.stringify(JSON.parse(jwt_access_token_data), null, 4));
+        }
     </script>
 
     <br/>
