@@ -10,7 +10,7 @@ use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
 use std::fmt::Write;
 
 use crate::entities::{
-    Config, ErrorInfo, GraphMe, JwtPayloadIDToken, LoginQueryString, MyAppError, MyAppResult,
+    Config, ErrorInfo, GraphMe, JwtPayloadIDToken, JwtAccessToken,LoginQueryString, MyAppError, MyAppResult,
     OpenIDConfigurationV2, ResponseAuthorized,
 };
 use actix_web::cookie::time::Duration;
@@ -28,7 +28,7 @@ use oauth2::{
     TokenResponse, TokenUrl,
 };
 use reqwest::StatusCode;
-use serde_json::{json};
+use serde_json::json;
 
 const SESSION_KEY_ID_TOKEN: &str = "ID_TOKEN_KEY";
 const SESSION_KEY_ERROR: &str = "ERROR_KEY";
@@ -249,7 +249,6 @@ async fn login(
     {
         error!("Response type = {} Not support", response_type.clone());
     }
-
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
     debug!(
         "PKCE challenge : {:?} \r\n ,\
@@ -297,7 +296,6 @@ async fn login(
             }
         }
     }
-
     auth_req = auth_req.add_extra_param("response_mode", response_mode);
     let res_type = ResponseType::new(response_type);
     auth_req = auth_req.set_response_type(&res_type);
@@ -389,7 +387,8 @@ async fn profile(
             let res_me = res_user_info.unwrap().json::<GraphMe>().await;
             let mut user = res_me.unwrap();
             user.ping_url = Some(data.to_owned().ping_url.clone().unwrap());
-            user.access_token = Some(access_token.access_token().secret().to_string());
+            // This access token for Graph API requests
+            user.access_token = None;//Some(access_token.access_token().secret().to_string());
             user.jwt_token_raw = Some(serde_json::to_string(&user.to_owned()).unwrap());
             let body = hb.render("profile", &user).unwrap();
             HttpResponse::Ok().body(body)
@@ -404,6 +403,7 @@ async fn profile(
                 display_name: None,
                 employee_id: None,
                 jwt_token_raw: None,
+                jwt_access_token_raw: None,
                 access_token: None,
                 ping_url: None,
             };
@@ -415,8 +415,15 @@ async fn profile(
             user.jwt_token_raw = Some(serde_json::to_string(&id_token.to_owned()).unwrap());
             user.ping_url = Some(data.to_owned().ping_url.clone().unwrap());
             if access_token.is_some() {
+                //  IT Token + Access Token
                 let access_token = access_token.unwrap();
                 user.access_token = Some(access_token.access_token().secret().to_string());
+                let access_token = user.access_token.clone().unwrap();
+                let key = DecodingKey::from_secret(&[]);
+                let mut validation = Validation::new(Algorithm::RS256);
+                validation.insecure_disable_signature_validation();
+                let data = decode::<JwtAccessToken>(access_token.as_str(), &key, &validation);
+                user.jwt_access_token_raw = Some(serde_json::to_string(&data.unwrap().claims.to_owned()).unwrap());
             }
             let body = hb.render("profile", &user).unwrap();
             HttpResponse::Ok().body(body)
@@ -552,8 +559,15 @@ async fn main() -> std::io::Result<()> {
                                        let param_ping_url = h.param(1)
                                            .ok_or(RenderError::new("param not found"))?;
                                        let out_helper = format!(r#"
-                                                            <input id="access_token" type="hidden" name="access_token" value="{}">
-                                                             <input id="submitButton" type="button" value="Call Ping > [{}]  with Access Token" > "#,
+                                                            <div class="card-header">Decoded JWT Access Token (for MyAPI)</div>
+                                                               <div class="card-body">
+                                                                     <pre id="json_access_token"> </pre>
+                                                                </div>
+                                                             <br/>
+                                                             <input id="access_token" type="hidden" name="access_token" value="{}">
+                                                             <input id="submitButton" class="btn-secondary" type="button" value="Call Ping > [{}]  with Access Token" > <br/>
+                                                              <pre id="json_api_reponse"></pre>
+                                                             "#,
                                                                 access_token.clone(),
                                                                 param_ping_url.render()
                                        );
@@ -606,7 +620,7 @@ async fn main() -> std::io::Result<()> {
                     .route(web::post().to(error_display)),
             )
             .route("/logout", web::get().to(logout))
-            .service(Files::new("/static", "static").prefer_utf8(true))
+            .service(Files::new("static", "./static").prefer_utf8(true))
     })
     // .keep_alive(KeepAlive::from(std::time::Duration::from_millis(10 * 1000)))
     .workers(20)

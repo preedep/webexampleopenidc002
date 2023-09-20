@@ -57,6 +57,37 @@ pub struct OpenIDConfigurationV2 {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct JwtAccessToken {
+    pub aud: Option<String>,
+    pub iss: Option<String>,
+    pub iat: Option<i64>,
+    pub nbf: Option<i64>,
+    pub exp: Option<i64>,
+    pub acr: Option<String>,
+    pub aio: Option<String>,
+    pub amr: Option<Vec<String>>,
+    pub appid: Option<String>,
+    pub appidacr: Option<String>,
+    pub email: Option<String>,
+    #[serde(rename = "family_name")]
+    pub family_name: Option<String>,
+    #[serde(rename = "given_name")]
+    pub given_name: Option<String>,
+    pub idp: Option<String>,
+    pub ipaddr: Option<String>,
+    pub name: Option<String>,
+    pub oid: Option<String>,
+    pub rh: Option<String>,
+    pub scp: Option<String>,
+    pub sub: Option<String>,
+    pub tid: Option<String>,
+    #[serde(rename = "unique_name")]
+    pub unique_name: Option<String>,
+    pub uti: Option<String>,
+    pub ver: Option<String>,
+}
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct JwtPayloadIDToken {
     pub aud: Option<String>,
     pub iss: Option<String>,
@@ -159,6 +190,8 @@ pub struct GraphMe {
     pub employee_id: Option<String>,
     #[serde(rename = "jwt_token_raw")]
     pub jwt_token_raw: Option<String>,
+    #[serde(rename="jwt_access_token_raw")]
+    pub jwt_access_token_raw: Option<String>,
     #[serde(rename = "access_token")]
     pub access_token: Option<String>,
     #[serde(rename = "ping_url")]

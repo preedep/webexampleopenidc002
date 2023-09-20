@@ -19,3 +19,5 @@ run_compose.sh
 run_redis.sh
 .idea/
 local.env
+/static/index_bkk.html
+/static/profile_bkk.html
