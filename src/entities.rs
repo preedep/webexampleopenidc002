@@ -132,6 +132,7 @@ pub struct JwtPayloadIDToken {
     pub xms_tpl: Option<String>,
     pub department: Option<String>,
     pub companyname: Option<String>,
+    pub officelocation: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

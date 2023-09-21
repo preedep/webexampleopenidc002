@@ -273,29 +273,32 @@ async fn login(
     .set_redirect_uri(RedirectUrl::new(data.redirect.clone()).unwrap());
     let mut auth_req = client
         .authorize_url(CsrfToken::new_random)
-        // Set the desired scopes.
-        .add_scope(Scope::new("openid".to_string()))
         .add_scope(Scope::new("offline_access".to_string()))
-        //.add_scope(Scope::new("User.Read".to_string()))
         .set_pkce_challenge(pkce_challenge);
 
     let response_type_lists = response_type.split(" ");
+
     let mut response_mode = "query";
-    if response_type.eq("id_token") || response_type.eq("id_token token") {
-        response_mode = "form_post";
-        auth_req = auth_req.add_extra_param("nonce", "1234234233232322222");
-        for response_type in response_type_lists.into_iter() {
-            if response_type.eq("id_token") {
-                auth_req = auth_req
-                    .add_scope(Scope::new("profile".to_string()))
-                    .add_scope(Scope::new("email".to_string()));
-            }
-            if response_type.eq("token") {
-                auth_req =
-                    auth_req.add_scope(Scope::new(data.api_permission_scope.clone().unwrap()));
-            }
+    for response_type in response_type_lists.into_iter() {
+        if response_type.eq("code") {
+            auth_req = auth_req
+                .add_scope(Scope::new("User.Read".to_string()))
+        }
+        if response_type.eq("id_token") {
+            response_mode = "form_post";
+            auth_req = auth_req.add_extra_param("nonce", "1234234233232322222");
+            auth_req = auth_req
+                .add_scope(Scope::new("openid".to_string()))
+                .add_scope(Scope::new("profile".to_string()))
+                .add_scope(Scope::new("email".to_string()));
+        }
+        if response_type.eq("token") {
+            auth_req =
+                auth_req.add_scope(Scope::new(data.api_permission_scope.clone().unwrap()));
         }
     }
+
+
     auth_req = auth_req.add_extra_param("response_mode", response_mode);
     let res_type = ResponseType::new(response_type);
     auth_req = auth_req.set_response_type(&res_type);
