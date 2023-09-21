@@ -289,8 +289,8 @@ async fn login(
 ) -> impl Responder {
     debug!("params : {:#?}", params);
 
-    let response_type = params.0.response_type.unwrap_or("code".to_string());
-    debug!("Get response_type {}", response_type);
+    let response_types = params.0.response_type.unwrap_or("code".to_string());
+    //debug!("Get response_type {}", response_type);
 
     if !data
         .open_id_config
@@ -298,9 +298,9 @@ async fn login(
         .unwrap()
         .response_types_supported
         .unwrap()
-        .contains(&response_type.to_owned())
+        .contains(&response_types.to_owned())
     {
-        error!("Response type = {} Not support", response_type.clone());
+        error!("Response type = {} Not support", response_types.clone());
     }
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
     debug!(
@@ -329,30 +329,33 @@ async fn login(
         .add_scope(Scope::new("offline_access".to_string()))
         .set_pkce_challenge(pkce_challenge);
 
-    let response_type_lists = response_type.split(" ");
+    let response_type_lists = response_types.split(" ");
 
     let mut response_mode = "query";
     let mut has_code = false;
     for response_type in response_type_lists.into_iter() {
         if response_type.eq("code") {
-            auth_req = auth_req.add_scope(Scope::new("User.Read".to_string()));
+            if !response_types.contains("id_token") {
+                auth_req = auth_req.add_scope(Scope::new("https://graph.microsoft.com/.default".to_string()));
+            }
             has_code = true;
         }
         if response_type.eq("id_token") {
             response_mode = "form_post";
             auth_req = auth_req.add_extra_param("nonce", "1234234233232322222")
-                .add_scope(Scope::new("openid".to_string()));
+                .add_scope(Scope::new("openid".to_string()))
+                .add_scope(Scope::new("email".to_string()))
+                .add_scope(Scope::new("profile".to_string()));
             if has_code {
                 auth_req = auth_req.add_scope(Scope::new(data.api_permission_scope.clone().unwrap()));
             }
         }
-        if response_type.eq("token") {
+        if response_type.eq("token") {//access token from implicit flow
             auth_req = auth_req.add_scope(Scope::new(data.api_permission_scope.clone().unwrap()));
         }
     }
-
     auth_req = auth_req.add_extra_param("response_mode", response_mode);
-    let res_type = ResponseType::new(response_type);
+    let res_type = ResponseType::new(response_types);
     auth_req = auth_req.set_response_type(&res_type);
     let (auth_url, csrf_token) = auth_req.url();
 
