@@ -132,6 +132,7 @@ pub struct JwtPayloadIDToken {
     pub xms_tpl: Option<String>,
     pub department: Option<String>,
     pub companyname: Option<String>,
+    pub officelocation: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -190,7 +191,7 @@ pub struct GraphMe {
     pub employee_id: Option<String>,
     #[serde(rename = "jwt_token_raw")]
     pub jwt_token_raw: Option<String>,
-    #[serde(rename="jwt_access_token_raw")]
+    #[serde(rename = "jwt_access_token_raw")]
     pub jwt_access_token_raw: Option<String>,
     #[serde(rename = "access_token")]
     pub access_token: Option<String>,

@@ -22,7 +22,7 @@
                             <div class="col-lg-10">
                                 <div class="card shadow-lg border-0 rounded-lg mt-10">
                                     <div class="card-header justify-content-center">
-                                        <h3 class="font-weight-light my-4">Login with Azure AD 1.7</h3></div>
+                                        <h3 class="font-weight-light my-4">Login with Azure AD 1.9</h3></div>
                                         <!--<button class="btn btn-primary btn-sm">Logout</button>-->
                                         <div class="card-body">
                                             <div class="row">
@@ -30,7 +30,8 @@
                                                     <ul class="nav nav-pills flex-column" id="cardPillVertical" role="tablist">
                                                         <li class="nav-item"><a class="nav-link active" id="authcode-btn-vertical" href="#authCode" data-toggle="tab" role="tab" aria-controls="overview" aria-selected="true">Auth Code</a></li>
                                                         <li class="nav-item"><a class="nav-link" id="id-token-btn-vertical" href="#idToken" data-toggle="tab" role="tab" aria-controls="example" aria-selected="false">ID Token</a></li>
-                                                        <li class="nav-item"><a class="nav-link" id="implicit-btn-vertical" href="#implicit" data-toggle="tab" role="tab" aria-controls="example" aria-selected="false">Implicit</a></li>
+                                                        <li class="nav-item"><a class="nav-link" id="implicit-id-token-auth-code-btn-vertical" href="#hyBridge" data-toggle="tab" role="tab" aria-controls="example" aria-selected="false">Hybrid (ID Token + Auth Code)</a></li>
+                                                        <li class="nav-item"><a class="nav-link" id="implicit-id-token-access-token-btn-vertical" href="#implicit" data-toggle="tab" role="tab" aria-controls="example" aria-selected="false">Implicit (ID Token + Access Token)</a></li>
                                                     </ul>
                                                 </div>
                                                 <div class="col-md-9">
@@ -45,7 +46,12 @@
                                                             <p class="card-text">ID Token , Open IDC for SSO</p>
                                                             <a class="btn btn-secondary" href="/login?response_type=id_token">Login</a>
                                                         </div>
-                                                        <div class="tab-pane fade" id="implicit" role="tabpanel" aria-labelledby="implicit-btn-vertical">
+                                                        <div class="tab-pane fade" id="hyBridge" role="tabpanel" aria-labelledby="implicit-id-token-auth-code-btn-vertical">
+                                                            <h5 class="card-title">Hybridge</h5>
+                                                            <p class="card-text">Auth Code + ID Token</p>
+                                                            <a class="btn btn-secondary" href="/login?response_type=code id_token">Login</a>
+                                                        </div>
+                                                        <div class="tab-pane fade" id="implicit" role="tabpanel" aria-labelledby="implicit-id-token-access-token-btn-vertical">
                                                             <h5 class="card-title">Implicit</h5>
                                                             <p class="card-text">ID Token + Access Token (for MyAPI)</p>
                                                             <a class="btn btn-secondary" href="/login?response_type=id_token token">Login</a>
