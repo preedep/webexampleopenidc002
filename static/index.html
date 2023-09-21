@@ -22,7 +22,7 @@
                             <div class="col-lg-10">
                                 <div class="card shadow-lg border-0 rounded-lg mt-10">
                                     <div class="card-header justify-content-center">
-                                        <h3 class="font-weight-light my-4">Login with Azure AD 1.10</h3></div>
+                                        <h3 class="font-weight-light my-4">Login with Azure AD 1.11</h3></div>
                                         <!--<button class="btn btn-primary btn-sm">Logout</button>-->
                                         <div class="card-body">
                                             <div class="row">
@@ -38,22 +38,31 @@
                                                     <div class="tab-content" id="cardPillContentVertical">
                                                         <div class="tab-pane fade show active" id="authCode"  role="tabpanel" aria-labelledby="authcode-btn-vertical">
                                                             <h5 class="card-title">Auth Code</h5>
-                                                            <p class="card-text">Auth Code Flow + PKCE , Get user profile from MS Graph API</p>
+                                                            <p class="card-text">Auth Code Flow + PKCE , Get user profile from MS Graph API <br/>
+                                                                <img src="https://learn.microsoft.com/en-us/azure/active-directory/develop/media/v2-oauth2-auth-code-flow/convergence-scenarios-native.svg" alt="">
+                                                                ** web app = MS Graph API
+                                                            </p>
                                                             <a class="btn btn-secondary" href="/login?response_type=code">Login</a>
                                                         </div>
                                                         <div class="tab-pane fade" id="idToken" role="tabpanel" aria-labelledby="id-token-btn-vertical">
                                                             <h5 class="card-title">ID Token</h5>
-                                                            <p class="card-text">ID Token , Open IDC for SSO</p>
+                                                            <p class="card-text">ID Token , Open IDC for SSO <br/>
+                                                                <img src="https://learn.microsoft.com/en-us/azure/active-directory/develop/media/v2-protocols-oidc/convergence-scenarios-webapp.svg" alt="">
+                                                            </p>
                                                             <a class="btn btn-secondary" href="/login?response_type=id_token">Login</a>
                                                         </div>
                                                         <div class="tab-pane fade" id="hyBridge" role="tabpanel" aria-labelledby="implicit-id-token-auth-code-btn-vertical">
                                                             <h5 class="card-title">Hybridge</h5>
-                                                            <p class="card-text">Auth Code + ID Token</p>
+                                                            <p class="card-text">ID Token + Auth Code (for MyAPI)<br/>
+                                                                <img src="https://learn.microsoft.com/en-us/azure/active-directory/develop/media/v2-oauth2-auth-code-flow/convergence-scenarios-native.svg" alt="">
+                                                            </p>
                                                             <a class="btn btn-secondary" href="/login?response_type=code id_token">Login</a>
                                                         </div>
                                                         <div class="tab-pane fade" id="implicit" role="tabpanel" aria-labelledby="implicit-id-token-access-token-btn-vertical">
                                                             <h5 class="card-title">Implicit</h5>
-                                                            <p class="card-text">ID Token + Access Token (for MyAPI)</p>
+                                                            <p class="card-text">ID Token + Access Token (for MyAPI) <br/>
+                                                                <img src="https://learn.microsoft.com/en-us/azure/active-directory/develop/media/v2-oauth2-implicit-grant-flow/convergence-scenarios-implicit.svg" alt="">
+                                                            </p>
                                                             <a class="btn btn-secondary" href="/login?response_type=id_token token">Login</a>
                                                         </div>
                                                     </div>
