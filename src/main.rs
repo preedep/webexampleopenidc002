@@ -470,13 +470,13 @@ async fn profile(
                 ping_url: None,
             };
             debug!("JWT ID Token : {:#?}", id_token);
+            user.employee_id = Some(id_token.to_owned().employee_id.unwrap_or("".to_string()));
             user.company_name = Some(id_token.to_owned().companyname.unwrap_or("".to_string()));
             user.department = Some(id_token.to_owned().department.unwrap_or("".to_string()));
             user.display_name = Some(id_token.to_owned().name.unwrap_or("".to_string()));
             user.office_location =
                 Some(id_token.to_owned().officelocation.unwrap_or("".to_string()));
 
-            user.employee_id = Some("".to_string());
             user.jwt_token_raw = Some(serde_json::to_string(&id_token.to_owned()).unwrap());
             user.ping_url = Some(data.to_owned().ping_url.clone().unwrap());
             if access_token.is_some() {
