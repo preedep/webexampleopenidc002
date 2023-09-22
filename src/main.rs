@@ -528,13 +528,13 @@ fn middle_ware_session(redis_connection: &str,use_cookie_ssl: bool) -> SessionMi
     )
         .cookie_name("COOK_WEB_EXAMPLE_KEY".to_string())
         .session_lifecycle(
-            PersistentSession::default().session_ttl(Duration::days(1 /*1 day*/)),
+            PersistentSession::default().session_ttl(Duration::minutes(15 /*1 day*/)),
         )
         //.session_lifecycle(BrowserSession::default()) // expire at end of session
         .cookie_secure(use_cookie_ssl)
-        .cookie_same_site(SameSite::Strict)
-        .cookie_content_security(CookieContentSecurity::Private) // encrypt
-        .cookie_http_only(true)
+        .cookie_same_site(SameSite::None)
+        //.cookie_content_security(CookieContentSecurity::Private) // encrypt
+        .cookie_http_only(false)
         .build()
 }
 ///
