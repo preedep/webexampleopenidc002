@@ -130,8 +130,13 @@ pub struct JwtPayloadIDToken {
     pub xms_pl: Option<String>,
     #[serde(rename = "xms_tpl")]
     pub xms_tpl: Option<String>,
+    #[serde(rename = "employee_id")]
+    pub employee_id: Option<String>,
+    #[serde(rename = "department")]
     pub department: Option<String>,
+    #[serde(rename = "companyname")]
     pub companyname: Option<String>,
+    #[serde(rename = "officelocation")]
     pub officelocation: Option<String>,
 }
 
@@ -189,6 +194,8 @@ pub struct GraphMe {
     pub display_name: Option<String>,
     #[serde(rename = "employeeId")]
     pub employee_id: Option<String>,
+    #[serde(rename = "officeLocation")]
+    pub office_location: Option<String>,
     #[serde(rename = "jwt_token_raw")]
     pub jwt_token_raw: Option<String>,
     #[serde(rename = "jwt_access_token_raw")]

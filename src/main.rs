@@ -1,12 +1,12 @@
 mod entities;
 
 use actix_files::Files;
-use actix_session::config::PersistentSession;
-use actix_session::storage::RedisActorSessionStore;
+use actix_session::config::{CookieContentSecurity, PersistentSession};
+use actix_session::storage::{RedisActorSessionStore, SessionStore};
 use actix_session::{Session, SessionMiddleware};
 use actix_web::middleware::Logger;
 use actix_web::web::{Data, Redirect};
-use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder, cookie};
 use std::fmt::Write;
 use std::thread::panicking;
 
@@ -125,7 +125,6 @@ async fn callback(
     return match get_code_verifier_from_session(&session, params.state.clone().unwrap()) {
         Ok(verifier) => {
             if params.id_token.is_some() && params.access_token.is_some() {
-
                 //id_token + access token
                 let jwt_id_token = params.id_token.clone().unwrap();
                 let key = DecodingKey::from_secret(&[]);
@@ -148,7 +147,6 @@ async fn callback(
                     .unwrap();
                 debug!("Insert ACCESS_KEY Successful ");
                 Redirect::to(PAGE_PROFILE).permanent()
-
             } else if params.id_token.is_some() && params.code.is_some() {
                 //id_token + auth code
                 let jwt_id_token = params.id_token.clone().unwrap();
@@ -336,21 +334,26 @@ async fn login(
     for response_type in response_type_lists.into_iter() {
         if response_type.eq("code") {
             if !response_types.contains("id_token") {
-                auth_req = auth_req.add_scope(Scope::new("https://graph.microsoft.com/.default".to_string()));
+                auth_req = auth_req.add_scope(Scope::new(
+                    "https://graph.microsoft.com/.default".to_string(),
+                ));
             }
             has_code = true;
         }
         if response_type.eq("id_token") {
             response_mode = "form_post";
-            auth_req = auth_req.add_extra_param("nonce", "1234234233232322222")
+            auth_req = auth_req
+                .add_extra_param("nonce", "1234234233232322222")
                 .add_scope(Scope::new("openid".to_string()))
                 .add_scope(Scope::new("email".to_string()))
                 .add_scope(Scope::new("profile".to_string()));
             if has_code {
-                auth_req = auth_req.add_scope(Scope::new(data.api_permission_scope.clone().unwrap()));
+                auth_req =
+                    auth_req.add_scope(Scope::new(data.api_permission_scope.clone().unwrap()));
             }
         }
-        if response_type.eq("token") {//access token from implicit flow
+        if response_type.eq("token") {
+            //access token from implicit flow
             auth_req = auth_req.add_scope(Scope::new(data.api_permission_scope.clone().unwrap()));
         }
     }
@@ -460,16 +463,20 @@ async fn profile(
                 department: None,
                 display_name: None,
                 employee_id: None,
+                office_location: None,
                 jwt_token_raw: None,
                 jwt_access_token_raw: None,
                 access_token: None,
                 ping_url: None,
             };
             debug!("JWT ID Token : {:#?}", id_token);
+            user.employee_id = Some(id_token.to_owned().employee_id.unwrap_or("".to_string()));
             user.company_name = Some(id_token.to_owned().companyname.unwrap_or("".to_string()));
             user.department = Some(id_token.to_owned().department.unwrap_or("".to_string()));
-            user.display_name = Some(id_token.name.to_owned().unwrap_or("".to_string()));
-            user.employee_id = Some("".to_string());
+            user.display_name = Some(id_token.to_owned().name.unwrap_or("".to_string()));
+            user.office_location =
+                Some(id_token.to_owned().officelocation.unwrap_or("".to_string()));
+
             user.jwt_token_raw = Some(serde_json::to_string(&id_token.to_owned()).unwrap());
             user.ping_url = Some(data.to_owned().ping_url.clone().unwrap());
             if access_token.is_some() {
@@ -516,6 +523,20 @@ async fn error_display(
     let body = hb.render("error", &data).unwrap();
     HttpResponse::Ok().body(body)
 }
+fn middle_ware_session(
+    redis_connection: &str,
+    private_key: cookie::Key,
+    use_cookie_ssl: bool,
+) -> SessionMiddleware<RedisActorSessionStore> {
+
+    SessionMiddleware::builder(RedisActorSessionStore::new(redis_connection), private_key)
+        .cookie_name("APP_AUTHEN_SESSION_KEY".to_string())
+        .session_lifecycle(PersistentSession::default().session_ttl(Duration::days(1 /*1 day*/)))
+        .cookie_secure(use_cookie_ssl)
+        .cookie_same_site(SameSite::None)
+        .cookie_http_only(true)
+        .build()
+}
 ///
 /// Main app
 ///
@@ -540,11 +561,7 @@ async fn main() -> std::io::Result<()> {
     let api_permission_scope = std::env::var("API_PERMISSION_SCOPE")
         .unwrap_or("api://81dd62c1-4209-4f24-bd81-99912098a77f/Ping.All".to_string());
 
-    let use_cookie_ssl: bool = match cookie_ssl.as_str() {
-        "false" => false,
-        "true" => true,
-        _ => false,
-    };
+    let use_cookie_ssl: bool = cookie_ssl.parse::<bool>().unwrap_or(false);
 
     let mut config = Config::new(
         redis_url,
@@ -583,10 +600,9 @@ async fn main() -> std::io::Result<()> {
             config.open_id_config = Some(cnf);
         }
         Err(e) => {
-            error!("Get meta error : {}", e);
+            panic!("Get meta error : {}", e);
         }
     }
-    let private_key = actix_web::cookie::Key::generate();
 
     //let redis_connection = config.clone().redis_url.replace("x","");
     //let redis_connection = redis_connection.clone().replace("y",config.clone().redis_auth_key.as_str());
@@ -637,6 +653,7 @@ async fn main() -> std::io::Result<()> {
                                    Ok(())
                                }));
 
+    let private_key = actix_web::cookie::Key::generate();
     HttpServer::new(move || {
         App::new()
             .app_data(Data::new(config.clone()))
@@ -646,20 +663,11 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::new(
                 r#"%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %T"#,
             ))
-            .wrap(
-                SessionMiddleware::builder(
-                    RedisActorSessionStore::new(redis_connection.to_owned()),
-                    private_key.clone(),
-                )
-                .cookie_name("COOK_WEB_EXAMPLE_KEY".to_string())
-                .session_lifecycle(
-                    PersistentSession::default().session_ttl(Duration::days(1 /*1 day*/)),
-                )
-                .cookie_secure(use_cookie_ssl)
-                .cookie_same_site(SameSite::None)
-                .cookie_http_only(false)
-                .build(),
-            )
+            .wrap(middle_ware_session(
+                redis_connection.as_str(),
+                 private_key.clone(),
+                 use_cookie_ssl,
+            ))
             //.wrap(RedirectHttps::with_hsts(StrictTransportSecurity::default()))
             .route("/", web::get().to(index))
             .route("/login", web::get().to(login))
