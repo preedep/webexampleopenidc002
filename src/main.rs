@@ -11,15 +11,15 @@ use std::fmt::Write;
 use std::thread::panicking;
 
 use crate::entities::{
-    Config, ErrorInfo, GraphMe, JwtAccessToken, JwtPayloadIDToken, LoginQueryString, MyAppError,
-    MyAppResult, OpenIDConfigurationV2, ResponseAuthorized,
+    Config, ErrorInfo, GraphMe, JWKSKeyItem, JwtAccessToken, JwtPayloadIDToken, LoginQueryString,
+    MyAppError, MyAppResult, OpenIDConfigurationV2, ResponseAuthorized, JWKS,
 };
 use actix_web::cookie::time::Duration;
 use actix_web::cookie::SameSite;
 use handlebars::{
     Context, Handlebars, Helper, HelperResult, JsonRender, Output, RenderContext, RenderError,
 };
-use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use log::{debug, error, info};
 use oauth2::basic::{BasicClient, BasicTokenResponse, BasicTokenType};
 use oauth2::reqwest::async_http_client;
@@ -38,6 +38,17 @@ const SESSION_KEY_ACCESS_TOKEN: &str = "ACCESS_TOKEN";
 const PAGE_PROFILE: &str = "/profile";
 const PAGE_ERROR: &str = "/error";
 
+fn get_jwks_item(jwks: &JWKS, kid: &str) -> Option<JWKSKeyItem> {
+    jwks.keys.iter().find_map(|items| {
+        items.iter().find_map(|item| {
+            if item.kid.clone().unwrap_or("".to_string()).eq(kid) {
+                Some(item.clone())
+            } else {
+                None
+            }
+        })
+    })
+}
 ///
 /// Function get code verifier
 ///
@@ -126,10 +137,13 @@ async fn callback(
         Ok(verifier) => {
             if params.id_token.is_some() && params.access_token.is_some() {
                 //id_token + access token
+                //verify id_token
+
                 let jwt_id_token = params.id_token.clone().unwrap();
                 let key = DecodingKey::from_secret(&[]);
                 let mut validation = Validation::new(Algorithm::RS256);
                 validation.insecure_disable_signature_validation();
+
                 let id_token_data =
                     decode::<JwtPayloadIDToken>(jwt_id_token.as_str(), &key, &validation);
                 let _ = session.insert(SESSION_KEY_ID_TOKEN, id_token_data.unwrap().claims);
@@ -149,10 +163,13 @@ async fn callback(
                 Redirect::to(PAGE_PROFILE).permanent()
             } else if params.id_token.is_some() && params.code.is_some() {
                 //id_token + auth code
+
+                //verify id_token
                 let jwt_id_token = params.id_token.clone().unwrap();
                 let key = DecodingKey::from_secret(&[]);
                 let mut validation = Validation::new(Algorithm::RS256);
                 validation.insecure_disable_signature_validation();
+
                 let id_token_data =
                     decode::<JwtPayloadIDToken>(jwt_id_token.as_str(), &key, &validation);
                 let _ = session.insert(SESSION_KEY_ID_TOKEN, id_token_data.unwrap().claims);
@@ -195,10 +212,99 @@ async fn callback(
                 Redirect::to(PAGE_PROFILE).permanent()
             } else if params.id_token.is_some() {
                 //id_token
+                //verify ID_TOKEN signature
+                let header = decode_header(&params.id_token.clone().unwrap());
+                match header {
+                    Ok(h) => {
+                        let jwks = data.jwks.clone().unwrap();
+                        match get_jwks_item(&jwks, h.kid.unwrap().as_str()) {
+                            Some(item) => {
+                                debug!("Found JWKS Item : {:?}", item);
+                                let token = decode::<JwtPayloadIDToken>(
+                                    params.id_token.clone().unwrap().as_str(),
+                                    &DecodingKey::from_rsa_components(
+                                        item.n.clone().unwrap().as_str(),
+                                        item.e.clone().unwrap().as_str(),
+                                    )
+                                    .unwrap(),
+                                    &Validation::new(Algorithm::RS256),
+                                );
+                                match token {
+                                    Ok(token_data) => {
+                                        debug!("ID Token Valid");
+                                        match session
+                                            .insert(SESSION_KEY_ID_TOKEN, token_data.claims.clone())
+                                        {
+                                            Ok(_) => {
+                                                debug!(
+                                                    "Insert session [{}] complete",
+                                                    SESSION_KEY_ID_TOKEN
+                                                );
+                                                Redirect::to(PAGE_PROFILE).permanent()
+                                            }
+                                            Err(e) => {
+                                                error!(
+                                                    "Insert session [{}] error {}",
+                                                    SESSION_KEY_ID_TOKEN, e
+                                                );
+                                                session
+                                                    .insert(
+                                                        SESSION_KEY_ERROR,
+                                                        ErrorInfo::new(StatusCode::UNAUTHORIZED)
+                                                            .set_error_message(format!("{}", e)),
+                                                    )
+                                                    .unwrap();
+                                                Redirect::to(PAGE_ERROR).permanent()
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!("Decode ID_TOKEN error {:?}", e);
+                                        session
+                                            .insert(
+                                                SESSION_KEY_ERROR,
+                                                ErrorInfo::new(StatusCode::UNAUTHORIZED)
+                                                    .set_error_message(format!("{}", e)),
+                                            )
+                                            .unwrap();
+                                        Redirect::to(PAGE_ERROR).permanent()
+                                    }
+                                }
+                            }
+                            None => {
+                                debug!("No JWKS Item");
+                                session
+                                    .insert(
+                                        SESSION_KEY_ERROR,
+                                        ErrorInfo::new(StatusCode::UNAUTHORIZED)
+                                            .set_error_message(format!("{}", "No JWKS Item ")),
+                                    )
+                                    .unwrap();
+                                Redirect::to(PAGE_ERROR).permanent()
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!("Error decoding ID Token");
+                        session
+                            .insert(
+                                SESSION_KEY_ERROR,
+                                ErrorInfo::new(StatusCode::UNAUTHORIZED)
+                                    .set_error_message(format!("{}", e)),
+                            )
+                            .unwrap();
+                        Redirect::to(PAGE_ERROR).permanent()
+                    }
+                }
+                ////////////////////////////////
+
+                /*
                 let jwt_id_token = params.id_token.clone().unwrap();
                 let key = DecodingKey::from_secret(&[]);
                 let mut validation = Validation::new(Algorithm::RS256);
                 validation.insecure_disable_signature_validation();
+
+
                 let data = decode::<JwtPayloadIDToken>(jwt_id_token.as_str(), &key, &validation);
                 match session.insert(SESSION_KEY_ID_TOKEN, data.unwrap().claims) {
                     Ok(_) => {
@@ -217,6 +323,7 @@ async fn callback(
                         Redirect::to(PAGE_ERROR).permanent()
                     }
                 }
+                */
             } else if params.code.is_some() {
                 //code
                 let client = BasicClient::new(
@@ -580,7 +687,6 @@ async fn main() -> std::io::Result<()> {
     //
     // Get azure ad meta data
     //
-
     let url_openid_config = format!(
         r#"https://login.microsoftonline.com/{:1}/v2.0/.well-known/openid-configuration?appid={:2}"#,
         config.to_owned().tenant_id,
@@ -597,6 +703,19 @@ async fn main() -> std::io::Result<()> {
         Ok(cnf) => {
             debug!("Meta data : {:#?}", cnf);
             config.open_id_config = Some(cnf);
+
+            //get JWKS for verify jwt token
+            let jwks_uri = config.open_id_config.clone().unwrap().jwks_uri.unwrap();
+            let jwks_items = reqwest::get(jwks_uri).await.unwrap().json::<JWKS>().await;
+            match jwks_items {
+                Ok(jwks) => {
+                    debug!("JWKS = {:#?}", jwks);
+                    config.jwks = Some(jwks.clone());
+                }
+                Err(e) => {
+                    panic!("Get jwks error : {}", e);
+                }
+            }
         }
         Err(e) => {
             panic!("Get meta error : {}", e);
