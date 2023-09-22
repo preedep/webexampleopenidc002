@@ -189,6 +189,8 @@ pub struct GraphMe {
     pub display_name: Option<String>,
     #[serde(rename = "employeeId")]
     pub employee_id: Option<String>,
+    #[serde(rename = "officeLocation")]
+    pub office_location: Option<String>,
     #[serde(rename = "jwt_token_raw")]
     pub jwt_token_raw: Option<String>,
     #[serde(rename = "jwt_access_token_raw")]

@@ -1,8 +1,8 @@
 mod entities;
 
 use actix_files::Files;
-use actix_session::config::PersistentSession;
-use actix_session::storage::RedisActorSessionStore;
+use actix_session::config::{CookieContentSecurity, PersistentSession};
+use actix_session::storage::{RedisActorSessionStore, SessionStore};
 use actix_session::{Session, SessionMiddleware};
 use actix_web::middleware::Logger;
 use actix_web::web::{Data, Redirect};
@@ -460,6 +460,7 @@ async fn profile(
                 department: None,
                 display_name: None,
                 employee_id: None,
+                office_location: None,
                 jwt_token_raw: None,
                 jwt_access_token_raw: None,
                 access_token: None,
@@ -468,7 +469,9 @@ async fn profile(
             debug!("JWT ID Token : {:#?}", id_token);
             user.company_name = Some(id_token.to_owned().companyname.unwrap_or("".to_string()));
             user.department = Some(id_token.to_owned().department.unwrap_or("".to_string()));
-            user.display_name = Some(id_token.name.to_owned().unwrap_or("".to_string()));
+            user.display_name = Some(id_token.to_owned().name.unwrap_or("".to_string()));
+            user.office_location = Some(id_token.to_owned().officelocation.unwrap_or("".to_string()));
+
             user.employee_id = Some("".to_string());
             user.jwt_token_raw = Some(serde_json::to_string(&id_token.to_owned()).unwrap());
             user.ping_url = Some(data.to_owned().ping_url.clone().unwrap());
@@ -515,6 +518,24 @@ async fn error_display(
     }
     let body = hb.render("error", &data).unwrap();
     HttpResponse::Ok().body(body)
+}
+fn middle_ware_session(redis_connection: &str,use_cookie_ssl: bool) -> SessionMiddleware<RedisActorSessionStore> {
+    let private_key = actix_web::cookie::Key::generate();
+
+    SessionMiddleware::builder(
+        RedisActorSessionStore::new(redis_connection),
+        private_key,
+    )
+        .cookie_name("COOK_WEB_EXAMPLE_KEY".to_string())
+        .session_lifecycle(
+            PersistentSession::default().session_ttl(Duration::days(1 /*1 day*/)),
+        )
+        //.session_lifecycle(BrowserSession::default()) // expire at end of session
+        .cookie_secure(use_cookie_ssl)
+        .cookie_same_site(SameSite::Strict)
+        .cookie_content_security(CookieContentSecurity::Private) // encrypt
+        .cookie_http_only(true)
+        .build()
 }
 ///
 /// Main app
@@ -586,7 +607,6 @@ async fn main() -> std::io::Result<()> {
             error!("Get meta error : {}", e);
         }
     }
-    let private_key = actix_web::cookie::Key::generate();
 
     //let redis_connection = config.clone().redis_url.replace("x","");
     //let redis_connection = redis_connection.clone().replace("y",config.clone().redis_auth_key.as_str());
@@ -646,19 +666,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::new(
                 r#"%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %T"#,
             ))
-            .wrap(
-                SessionMiddleware::builder(
-                    RedisActorSessionStore::new(redis_connection.to_owned()),
-                    private_key.clone(),
-                )
-                .cookie_name("COOK_WEB_EXAMPLE_KEY".to_string())
-                .session_lifecycle(
-                    PersistentSession::default().session_ttl(Duration::days(1 /*1 day*/)),
-                )
-                .cookie_secure(use_cookie_ssl)
-                .cookie_same_site(SameSite::None)
-                .cookie_http_only(false)
-                .build(),
+            .wrap(middle_ware_session(redis_connection.as_str(),use_cookie_ssl),
             )
             //.wrap(RedirectHttps::with_hsts(StrictTransportSecurity::default()))
             .route("/", web::get().to(index))
