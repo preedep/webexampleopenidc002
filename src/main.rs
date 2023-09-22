@@ -6,7 +6,7 @@ use actix_session::storage::{RedisActorSessionStore, SessionStore};
 use actix_session::{Session, SessionMiddleware};
 use actix_web::middleware::Logger;
 use actix_web::web::{Data, Redirect};
-use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder, cookie};
+use actix_web::{cookie, middleware, web, App, HttpResponse, HttpServer, Responder};
 use std::fmt::Write;
 use std::thread::panicking;
 
@@ -528,7 +528,6 @@ fn middle_ware_session(
     private_key: cookie::Key,
     use_cookie_ssl: bool,
 ) -> SessionMiddleware<RedisActorSessionStore> {
-
     SessionMiddleware::builder(RedisActorSessionStore::new(redis_connection), private_key)
         .cookie_name("APP_AUTHEN_SESSION_KEY".to_string())
         .session_lifecycle(PersistentSession::default().session_ttl(Duration::days(1 /*1 day*/)))
@@ -665,8 +664,8 @@ async fn main() -> std::io::Result<()> {
             ))
             .wrap(middle_ware_session(
                 redis_connection.as_str(),
-                 private_key.clone(),
-                 use_cookie_ssl,
+                private_key.clone(),
+                use_cookie_ssl,
             ))
             //.wrap(RedirectHttps::with_hsts(StrictTransportSecurity::default()))
             .route("/", web::get().to(index))
