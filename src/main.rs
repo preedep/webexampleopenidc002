@@ -1,13 +1,16 @@
 mod entities;
 
+use actix_web::{dev::Service as _};
+use futures_util::future::FutureExt;
+
 use actix_files::Files;
 use actix_session::config::{CookieContentSecurity, PersistentSession};
 use actix_session::storage::{RedisActorSessionStore, SessionStore};
-use actix_session::{Session, SessionMiddleware};
+use actix_session::{Session, SessionExt, SessionMiddleware};
 use actix_web::middleware::Logger;
 use actix_web::web::{Data, Redirect};
 use actix_web::{cookie, middleware, web, App, HttpResponse, HttpServer, Responder};
-use std::fmt::Write;
+use std::fmt::{Write};
 use std::thread::panicking;
 
 use crate::entities::{
@@ -19,7 +22,8 @@ use actix_web::cookie::SameSite;
 use handlebars::{
     Context, Handlebars, Helper, HelperResult, JsonRender, Output, RenderContext, RenderError,
 };
-use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
+use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation, TokenData};
+use jsonwebtoken::errors::{Error, ErrorKind};
 use log::{debug, error, info};
 use oauth2::basic::{BasicClient, BasicTokenResponse, BasicTokenType};
 use oauth2::reqwest::async_http_client;
@@ -28,7 +32,8 @@ use oauth2::{
     EmptyExtraTokenFields, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, ResponseType, Scope,
     TokenResponse, TokenUrl,
 };
-use reqwest::StatusCode;
+use reqwest::{Method, StatusCode};
+use serde::de::DeserializeOwned;
 use serde_json::json;
 
 const SESSION_KEY_ID_TOKEN: &str = "ID_TOKEN_KEY";
@@ -67,6 +72,34 @@ fn get_code_verifier_from_session(
     }
     Err(MyAppError::new(format!("Key [{}] No Value ", key)))
 }
+
+fn jwt_token_validation<T: DeserializeOwned>(jwt_token: &str,jwks : &JWKS) -> Result<TokenData<T>,Error> {
+    let header = decode_header(jwt_token);
+    match header {
+        Ok(h) => {
+            match get_jwks_item(jwks, h.kid.unwrap().as_str()) {
+                Some(item) => {
+                    debug!("Found JWKS Item : {:?}", item);
+                    let token = decode::<T>(
+                       jwt_token,
+                        &DecodingKey::from_rsa_components(
+                            item.n.clone().unwrap().as_str(),
+                            item.e.clone().unwrap().as_str(),
+                        )
+                            .unwrap(),
+                        &Validation::new(Algorithm::RS256),
+                    );
+                    token
+                }
+                None => Err(jsonwebtoken::errors::Error::from(ErrorKind::InvalidAudience)),
+            }
+        }
+        Err(e) => {
+            Err(e)
+        }
+    }
+}
+
 ///
 /// Logout
 ///
@@ -110,6 +143,7 @@ async fn post_callback(
 ) -> impl Responder {
     callback(session, params.0, data).await
 }
+
 ///
 /// Callback
 ///
@@ -163,7 +197,6 @@ async fn callback(
                 Redirect::to(PAGE_PROFILE).permanent()
             } else if params.id_token.is_some() && params.code.is_some() {
                 //id_token + auth code
-
                 //verify id_token
                 let jwt_id_token = params.id_token.clone().unwrap();
                 let key = DecodingKey::from_secret(&[]);
@@ -213,117 +246,27 @@ async fn callback(
             } else if params.id_token.is_some() {
                 //id_token
                 //verify ID_TOKEN signature
-                let header = decode_header(&params.id_token.clone().unwrap());
-                match header {
-                    Ok(h) => {
-                        let jwks = data.jwks.clone().unwrap();
-                        match get_jwks_item(&jwks, h.kid.unwrap().as_str()) {
-                            Some(item) => {
-                                debug!("Found JWKS Item : {:?}", item);
-                                let token = decode::<JwtPayloadIDToken>(
-                                    params.id_token.clone().unwrap().as_str(),
-                                    &DecodingKey::from_rsa_components(
-                                        item.n.clone().unwrap().as_str(),
-                                        item.e.clone().unwrap().as_str(),
-                                    )
-                                    .unwrap(),
-                                    &Validation::new(Algorithm::RS256),
-                                );
-                                match token {
-                                    Ok(token_data) => {
-                                        debug!("ID Token Valid");
-                                        match session
-                                            .insert(SESSION_KEY_ID_TOKEN, token_data.claims.clone())
-                                        {
-                                            Ok(_) => {
-                                                debug!(
-                                                    "Insert session [{}] complete",
-                                                    SESSION_KEY_ID_TOKEN
-                                                );
-                                                Redirect::to(PAGE_PROFILE).permanent()
-                                            }
-                                            Err(e) => {
-                                                error!(
-                                                    "Insert session [{}] error {}",
-                                                    SESSION_KEY_ID_TOKEN, e
-                                                );
-                                                session
-                                                    .insert(
-                                                        SESSION_KEY_ERROR,
-                                                        ErrorInfo::new(StatusCode::UNAUTHORIZED)
-                                                            .set_error_message(format!("{}", e)),
-                                                    )
-                                                    .unwrap();
-                                                Redirect::to(PAGE_ERROR).permanent()
-                                            }
-                                        }
-                                    }
-                                    Err(e) => {
-                                        error!("Decode ID_TOKEN error {:?}", e);
-                                        session
-                                            .insert(
-                                                SESSION_KEY_ERROR,
-                                                ErrorInfo::new(StatusCode::UNAUTHORIZED)
-                                                    .set_error_message(format!("{}", e)),
-                                            )
-                                            .unwrap();
-                                        Redirect::to(PAGE_ERROR).permanent()
-                                    }
-                                }
-                            }
-                            None => {
-                                debug!("No JWKS Item");
-                                session
-                                    .insert(
-                                        SESSION_KEY_ERROR,
-                                        ErrorInfo::new(StatusCode::UNAUTHORIZED)
-                                            .set_error_message(format!("{}", "No JWKS Item ")),
-                                    )
-                                    .unwrap();
-                                Redirect::to(PAGE_ERROR).permanent()
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!("Error decoding ID Token");
-                        session
-                            .insert(
-                                SESSION_KEY_ERROR,
-                                ErrorInfo::new(StatusCode::UNAUTHORIZED)
-                                    .set_error_message(format!("{}", e)),
-                            )
-                            .unwrap();
-                        Redirect::to(PAGE_ERROR).permanent()
-                    }
-                }
-                ////////////////////////////////
-
-                /*
-                let jwt_id_token = params.id_token.clone().unwrap();
-                let key = DecodingKey::from_secret(&[]);
-                let mut validation = Validation::new(Algorithm::RS256);
-                validation.insecure_disable_signature_validation();
-
-
-                let data = decode::<JwtPayloadIDToken>(jwt_id_token.as_str(), &key, &validation);
-                match session.insert(SESSION_KEY_ID_TOKEN, data.unwrap().claims) {
-                    Ok(_) => {
+                //example for verify JWT signature
+                let result = jwt_token_validation::<JwtPayloadIDToken>(&params.id_token.clone().unwrap(),
+                                                  &data.jwks.clone().unwrap());
+                match result {
+                    Ok(token) => {
+                        let _ = session.insert(SESSION_KEY_ID_TOKEN, token.claims);
                         debug!("Insert ID_TOKEN_KEY Successful ");
                         Redirect::to(PAGE_PROFILE).permanent()
                     }
                     Err(e) => {
-                        error!("Insert Session Error {}", e);
                         session
-                            .insert(
+                          .insert(
                                 SESSION_KEY_ERROR,
-                                ErrorInfo::new(StatusCode::UNAUTHORIZED)
-                                    .set_error_message(format!("{}", e)),
+                                ErrorInfo::new(StatusCode::BAD_REQUEST)
+                                  .set_error_message(format!("{}", e)),
                             )
-                            .unwrap();
+                          .unwrap();
                         Redirect::to(PAGE_ERROR).permanent()
                     }
                 }
-                */
+                ////////////////////////////////
             } else if params.code.is_some() {
                 //code
                 let client = BasicClient::new(
@@ -643,6 +586,7 @@ fn middle_ware_session(
         .cookie_http_only(true)
         .build()
 }
+
 ///
 /// Main app
 ///
@@ -781,6 +725,24 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::new(
                 r#"%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %T"#,
             ))
+            .wrap_fn(|req, srv|{
+                //hook all web requests
+                debug!("Hi from start. You requested: {}", req.path());
+                if req.path().eq("/profile") {
+                    match req.method() {
+                        &Method::POST | &Method::GET => {
+                        }
+                        _ => {
+                            //  return HttpResponse::MethodNotAllowed();
+                        }
+                    }
+                }
+                srv.call(req).map(|res| {
+                    debug!("Hi from response");
+                    res
+                })
+                ////
+            })
             .wrap(middle_ware_session(
                 redis_connection.as_str(),
                 private_key.clone(),
