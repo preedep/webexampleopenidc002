@@ -1,6 +1,6 @@
 mod entities;
 
-use actix_web::{dev::Service as _};
+use actix_web::dev::Service as _;
 use futures_util::future::FutureExt;
 
 use actix_files::Files;
@@ -10,7 +10,8 @@ use actix_session::{Session, SessionExt, SessionMiddleware};
 use actix_web::middleware::Logger;
 use actix_web::web::{Data, Redirect};
 use actix_web::{cookie, middleware, web, App, HttpResponse, HttpServer, Responder};
-use std::fmt::{Write};
+use std::fmt::Write;
+use std::io::ErrorKind::Other;
 use std::thread::panicking;
 
 use crate::entities::{
@@ -22,16 +23,12 @@ use actix_web::cookie::SameSite;
 use handlebars::{
     Context, Handlebars, Helper, HelperResult, JsonRender, Output, RenderContext, RenderError,
 };
-use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation, TokenData};
 use jsonwebtoken::errors::{Error, ErrorKind};
+use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, TokenData, Validation};
 use log::{debug, error, info};
 use oauth2::basic::{BasicClient, BasicTokenResponse, BasicTokenType};
 use oauth2::reqwest::async_http_client;
-use oauth2::{
-    AccessToken, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
-    EmptyExtraTokenFields, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, ResponseType, Scope,
-    TokenResponse, TokenUrl,
-};
+use oauth2::{AccessToken, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, EmptyExtraTokenFields, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, ResponseType, Scope, TokenResponse, TokenUrl, RequestTokenError};
 use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
 use serde_json::json;
@@ -73,33 +70,65 @@ fn get_code_verifier_from_session(
     Err(MyAppError::new(format!("Key [{}] No Value ", key)))
 }
 
-fn jwt_token_validation<T: DeserializeOwned>(jwt_token: &str,jwks : &JWKS) -> Result<TokenData<T>,Error> {
+fn jwt_token_validation<T: DeserializeOwned>(
+    jwt_token: &str,
+    jwks: &JWKS,
+) -> Result<TokenData<T>, Error> {
     let header = decode_header(jwt_token);
     match header {
-        Ok(h) => {
-            match get_jwks_item(jwks, h.kid.unwrap().as_str()) {
-                Some(item) => {
-                    debug!("Found JWKS Item : {:?}", item);
-                    let token = decode::<T>(
-                       jwt_token,
-                        &DecodingKey::from_rsa_components(
-                            item.n.clone().unwrap().as_str(),
-                            item.e.clone().unwrap().as_str(),
-                        )
-                            .unwrap(),
-                        &Validation::new(Algorithm::RS256),
-                    );
-                    token
-                }
-                None => Err(jsonwebtoken::errors::Error::from(ErrorKind::InvalidAudience)),
+        Ok(h) => match get_jwks_item(jwks, h.kid.unwrap().as_str()) {
+            Some(item) => {
+                debug!("Found JWKS Item : {:?}", item);
+                let token = decode::<T>(
+                    jwt_token,
+                    &DecodingKey::from_rsa_components(
+                        item.n.clone().unwrap().as_str(),
+                        item.e.clone().unwrap().as_str(),
+                    )
+                    .unwrap(),
+                    &Validation::new(Algorithm::RS256),
+                );
+                token
             }
-        }
-        Err(e) => {
-            Err(e)
-        }
+            None => Err(jsonwebtoken::errors::Error::from(
+                ErrorKind::InvalidAudience,
+            )),
+        },
+        Err(e) => Err(e),
     }
 }
-
+async fn get_access_token( data: &web::Data<Config>,auth_code: &str,code_verifier: &str) -> Result<BasicTokenResponse,std::io::Error>{
+    let client = BasicClient::new(
+        ClientId::new(data.client_id.clone()),
+        Some(ClientSecret::new(data.client_secret.clone())),
+        AuthUrl::new(
+            data.open_id_config
+                .clone()
+                .unwrap()
+                .authorization_endpoint
+                .unwrap(),
+        )
+            .unwrap(),
+        Some(
+            TokenUrl::new(
+                data.open_id_config.clone().unwrap().token_endpoint.unwrap(),
+            )
+                .unwrap(),
+        ),
+    )
+        // Set the URL the user will be redirected to after the authorization process.
+        .set_redirect_uri(RedirectUrl::new(data.redirect.clone()).unwrap());
+    info!("request access token ");
+    let token_result = client
+        .exchange_code(AuthorizationCode::new(auth_code.to_string()))
+        .add_extra_param("code_verifier", code_verifier)
+        .request_async(async_http_client)
+        .await.map_err(|e|{
+            std::io::Error::new(Other, e.to_string())
+    });
+    //debug!("token result > {:#?}", token_result);
+    token_result
+}
 ///
 /// Logout
 ///
@@ -166,89 +195,93 @@ async fn callback(
         }
         Some(_) => {}
     }
-
     return match get_code_verifier_from_session(&session, params.state.clone().unwrap()) {
         Ok(verifier) => {
             if params.id_token.is_some() && params.access_token.is_some() {
                 //id_token + access token
                 //verify id_token
-
-                let jwt_id_token = params.id_token.clone().unwrap();
-                let key = DecodingKey::from_secret(&[]);
-                let mut validation = Validation::new(Algorithm::RS256);
-                validation.insecure_disable_signature_validation();
-
-                let id_token_data =
-                    decode::<JwtPayloadIDToken>(jwt_id_token.as_str(), &key, &validation);
-                let _ = session.insert(SESSION_KEY_ID_TOKEN, id_token_data.unwrap().claims);
-
-                debug!("Insert ID_TOKEN_KEY Successful ");
-                let _ = session
-                    .insert(
-                        SESSION_KEY_ACCESS_TOKEN,
-                        BasicTokenResponse::new(
-                            AccessToken::new(params.access_token.unwrap()),
-                            BasicTokenType::Bearer,
-                            EmptyExtraTokenFields {},
-                        ),
-                    )
-                    .unwrap();
-                debug!("Insert ACCESS_KEY Successful ");
-                Redirect::to(PAGE_PROFILE).permanent()
+                let result = jwt_token_validation::<JwtPayloadIDToken>(
+                    &params.id_token.clone().unwrap(),
+                    &data.jwks.clone().unwrap(),
+                );
+                match result {
+                    Ok(token) => {
+                        let _ = session.insert(SESSION_KEY_ID_TOKEN, token.claims);
+                        debug!("Insert ID_TOKEN_KEY Successful ");
+                        let _ = session
+                            .insert(
+                                SESSION_KEY_ACCESS_TOKEN,
+                                BasicTokenResponse::new(
+                                    AccessToken::new(params.access_token.unwrap()),
+                                    BasicTokenType::Bearer,
+                                    EmptyExtraTokenFields {},
+                                ),
+                            )
+                            .unwrap();
+                        debug!("Insert ACCESS_KEY Successful ");
+                        Redirect::to(PAGE_PROFILE).permanent()
+                    }
+                    Err(e) => {
+                        session
+                            .insert(
+                                SESSION_KEY_ERROR,
+                                ErrorInfo::new(StatusCode::BAD_REQUEST)
+                                    .set_error_message(format!("{}", e)),
+                            )
+                            .unwrap();
+                        Redirect::to(PAGE_ERROR).permanent()
+                    }
+                }
             } else if params.id_token.is_some() && params.code.is_some() {
                 //id_token + auth code
                 //verify id_token
-                let jwt_id_token = params.id_token.clone().unwrap();
-                let key = DecodingKey::from_secret(&[]);
-                let mut validation = Validation::new(Algorithm::RS256);
-                validation.insecure_disable_signature_validation();
-
-                let id_token_data =
-                    decode::<JwtPayloadIDToken>(jwt_id_token.as_str(), &key, &validation);
-                let _ = session.insert(SESSION_KEY_ID_TOKEN, id_token_data.unwrap().claims);
-                debug!("Insert ID_TOKEN_KEY Successful ");
-
-                let client = BasicClient::new(
-                    ClientId::new(data.client_id.clone()),
-                    Some(ClientSecret::new(data.client_secret.clone())),
-                    AuthUrl::new(
-                        data.open_id_config
-                            .clone()
-                            .unwrap()
-                            .authorization_endpoint
-                            .unwrap(),
-                    )
-                    .unwrap(),
-                    Some(
-                        TokenUrl::new(data.open_id_config.clone().unwrap().token_endpoint.unwrap())
-                            .unwrap(),
-                    ),
-                )
-                // Set the URL the user will be redirected to after the authorization process.
-                .set_redirect_uri(RedirectUrl::new(data.redirect.clone()).unwrap());
-                info!("request access token ");
-                let token_result = client
-                    .exchange_code(AuthorizationCode::new(params.code.unwrap()))
-                    .add_extra_param("code_verifier", verifier.unwrap().secret())
-                    .request_async(async_http_client)
-                    .await;
-                debug!("token result > {:#?}", token_result);
-                match session.insert(SESSION_KEY_ACCESS_TOKEN, token_result.unwrap()) {
-                    Ok(_) => {
-                        debug!("Insert session [{}] complete", SESSION_KEY_ACCESS_TOKEN);
+                let result = jwt_token_validation::<JwtPayloadIDToken>(
+                    &params.id_token.clone().unwrap(),
+                    &data.jwks.clone().unwrap(),
+                );
+                match result {
+                    Ok(token) => {
+                        let _ = session.insert(SESSION_KEY_ID_TOKEN, token.claims);
+                        debug!("Insert ID_TOKEN_KEY Successful ");
+                        let result_access =
+                            get_access_token(&data,params.code.unwrap().as_str(),verifier.unwrap().secret().as_str()).await;
+                        match result_access {
+                            Ok(token) => {
+                                let _ = session.insert(SESSION_KEY_ACCESS_TOKEN, token);
+                                debug!("Insert ACCESS_KEY Successful ");
+                                Redirect::to(PAGE_PROFILE).permanent()
+                            }
+                            Err(e) => {
+                                session
+                                  .insert(
+                                        SESSION_KEY_ERROR,
+                                        ErrorInfo::new(StatusCode::BAD_REQUEST)
+                                          .set_error_message(format!("{}", e)),
+                                    )
+                                  .unwrap();
+                                Redirect::to(PAGE_ERROR).permanent()
+                            }
+                        }
                     }
                     Err(e) => {
-                        error!("Insert session [{}] error {}", SESSION_KEY_ACCESS_TOKEN, e);
+                        session
+                            .insert(
+                                SESSION_KEY_ERROR,
+                                ErrorInfo::new(StatusCode::BAD_REQUEST)
+                                    .set_error_message(format!("{}", e)),
+                            )
+                            .unwrap();
+                        Redirect::to(PAGE_ERROR).permanent()
                     }
                 }
-                debug!("Handle grant auth code");
-                Redirect::to(PAGE_PROFILE).permanent()
             } else if params.id_token.is_some() {
                 //id_token
                 //verify ID_TOKEN signature
                 //example for verify JWT signature
-                let result = jwt_token_validation::<JwtPayloadIDToken>(&params.id_token.clone().unwrap(),
-                                                  &data.jwks.clone().unwrap());
+                let result = jwt_token_validation::<JwtPayloadIDToken>(
+                    &params.id_token.clone().unwrap(),
+                    &data.jwks.clone().unwrap(),
+                );
                 match result {
                     Ok(token) => {
                         let _ = session.insert(SESSION_KEY_ID_TOKEN, token.claims);
@@ -257,53 +290,37 @@ async fn callback(
                     }
                     Err(e) => {
                         session
-                          .insert(
+                            .insert(
                                 SESSION_KEY_ERROR,
                                 ErrorInfo::new(StatusCode::BAD_REQUEST)
-                                  .set_error_message(format!("{}", e)),
+                                    .set_error_message(format!("{}", e)),
                             )
-                          .unwrap();
+                            .unwrap();
                         Redirect::to(PAGE_ERROR).permanent()
                     }
                 }
                 ////////////////////////////////
             } else if params.code.is_some() {
                 //code
-                let client = BasicClient::new(
-                    ClientId::new(data.client_id.clone()),
-                    Some(ClientSecret::new(data.client_secret.clone())),
-                    AuthUrl::new(
-                        data.open_id_config
-                            .clone()
-                            .unwrap()
-                            .authorization_endpoint
-                            .unwrap(),
-                    )
-                    .unwrap(),
-                    Some(
-                        TokenUrl::new(data.open_id_config.clone().unwrap().token_endpoint.unwrap())
-                            .unwrap(),
-                    ),
-                )
-                // Set the URL the user will be redirected to after the authorization process.
-                .set_redirect_uri(RedirectUrl::new(data.redirect.clone()).unwrap());
-                info!("request access token ");
-                let token_result = client
-                    .exchange_code(AuthorizationCode::new(params.code.unwrap()))
-                    .add_extra_param("code_verifier", verifier.unwrap().secret())
-                    .request_async(async_http_client)
-                    .await;
-                debug!("token result > {:#?}", token_result);
-                match session.insert(SESSION_KEY_ACCESS_TOKEN, token_result.unwrap()) {
-                    Ok(_) => {
-                        debug!("Insert session [{}] complete", SESSION_KEY_ACCESS_TOKEN);
+                let result_access =
+                    get_access_token(&data,params.code.unwrap().as_str(),verifier.unwrap().secret().as_str()).await;
+                match result_access {
+                    Ok(token) => {
+                        let _ = session.insert(SESSION_KEY_ACCESS_TOKEN, token);
+                        debug!("Insert ACCESS_KEY Successful ");
+                        Redirect::to(PAGE_PROFILE).permanent()
                     }
                     Err(e) => {
-                        error!("Insert session [{}] error {}", SESSION_KEY_ACCESS_TOKEN, e);
+                        session
+                            .insert(
+                                SESSION_KEY_ERROR,
+                                ErrorInfo::new(StatusCode::BAD_REQUEST)
+                                    .set_error_message(format!("{}", e)),
+                            )
+                            .unwrap();
+                        Redirect::to(PAGE_ERROR).permanent()
                     }
                 }
-                debug!("Handle grant auth code");
-                Redirect::to(PAGE_PROFILE).permanent()
             } else {
                 session
                     .insert(
@@ -725,13 +742,12 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::new(
                 r#"%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %T"#,
             ))
-            .wrap_fn(|req, srv|{
+            .wrap_fn(|req, srv| {
                 //hook all web requests
                 debug!("Hi from start. You requested: {}", req.path());
                 if req.path().eq("/profile") {
                     match req.method() {
-                        &Method::POST | &Method::GET => {
-                        }
+                        &Method::POST | &Method::GET => {}
                         _ => {
                             //  return HttpResponse::MethodNotAllowed();
                         }
