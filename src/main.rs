@@ -616,8 +616,9 @@ fn middle_ware_session(
 ) -> SessionMiddleware<RedisActorSessionStore> {
     SessionMiddleware::builder(RedisActorSessionStore::new(redis_connection), private_key)
         .cookie_name("APP_AUTHEN_SESSION_KEY".to_string())
-        .session_lifecycle(PersistentSession::default().session_ttl(Duration::days(1 /*1 day*/)))
+        .session_lifecycle(PersistentSession::default().session_ttl(Duration::minutes(15 /*1 day*/)))
         .cookie_secure(use_cookie_ssl)
+        //.cookie_content_security(CookieContentSecurity::Private)
         .cookie_same_site(SameSite::None)
         .cookie_http_only(true)
         .build()
