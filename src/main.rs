@@ -4,16 +4,16 @@ use actix_web::dev::Service as _;
 use futures_util::future::FutureExt;
 
 use actix_files::Files;
-use actix_session::config::{CookieContentSecurity, PersistentSession};
-use actix_session::storage::{RedisActorSessionStore, SessionStore};
-use actix_session::{Session, SessionExt, SessionMiddleware};
+use actix_session::config::{PersistentSession};
+use actix_session::storage::{RedisActorSessionStore};
+use actix_session::{Session, SessionMiddleware};
 use actix_web::middleware::Logger;
 use actix_web::web::Data;
 use actix_web::{cookie, middleware, web, App, HttpResponse, HttpServer, Responder};
-use std::fmt::Write;
+
 use std::io::ErrorKind::Other;
-use std::os::unix::raw::time_t;
-use std::thread::panicking;
+
+
 
 use crate::entities::{
     Config, ErrorInfo, GraphMe, JWKSKeyItem, JwtAccessToken, JwtPayloadIDToken, LoginQueryString,
@@ -23,7 +23,7 @@ use actix_web::cookie::time::Duration;
 use actix_web::cookie::SameSite;
 use actix_web::http::header::LOCATION;
 use handlebars::{
-    Context, Handlebars, Helper, HelperResult, JsonRender, Output, RenderContext, RenderError,
+    Context, Handlebars, Helper, HelperResult,  Output, RenderContext, RenderError,
 };
 use jsonwebtoken::errors::{Error, ErrorKind};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, TokenData, Validation};
@@ -32,7 +32,7 @@ use oauth2::basic::{BasicClient, BasicTokenResponse, BasicTokenType};
 use oauth2::reqwest::async_http_client;
 use oauth2::{
     AccessToken, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
-    EmptyExtraTokenFields, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, RequestTokenError,
+    EmptyExtraTokenFields, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl,
     ResponseType, Scope, TokenResponse, TokenUrl,
 };
 use reqwest::{Method, StatusCode};
@@ -206,7 +206,7 @@ fn redirect_to_error_page(session: &Session, error: &ErrorInfo) -> HttpResponse 
 ///
 /// redirect to page
 ///
-fn redirect_to_page(session: &Session, page: &str) -> HttpResponse {
+fn redirect_to_page(_session: &Session, page: &str) -> HttpResponse {
     HttpResponse::SeeOther()
         .insert_header((LOCATION, page))
         .finish()
@@ -459,16 +459,6 @@ async fn login(
         }
         Err(e) => {
             error!("save session error : {}", e);
-            /*
-            session
-                .insert(
-                    SESSION_KEY_ERROR,
-                    ErrorInfo::new(StatusCode::UNAUTHORIZED).set_error_message(format!("{}", e)),
-                )
-                .unwrap();
-            Redirect::to(PAGE_ERROR).permanent()
-
-             */
             redirect_to_error_page(
                 &session,
                 &ErrorInfo::new(StatusCode::UNAUTHORIZED).set_error_message(format!("{}", e)),
@@ -480,8 +470,8 @@ async fn login(
 ///  main page
 ///
 async fn index(
-    session: Session,
-    data: web::Data<Config>,
+    _session: Session,
+    _data: web::Data<Config>,
     hb: web::Data<Handlebars<'_>>,
 ) -> impl Responder {
     //session.insert("test","test").unwrap();
@@ -587,7 +577,7 @@ async fn profile(
 ///
 async fn error_display(
     session: Session,
-    data: web::Data<Config>,
+    _data: web::Data<Config>,
     hb: web::Data<Handlebars<'_>>,
 ) -> impl Responder {
     let data = json!({
@@ -616,8 +606,11 @@ fn middle_ware_session(
 ) -> SessionMiddleware<RedisActorSessionStore> {
     SessionMiddleware::builder(RedisActorSessionStore::new(redis_connection), private_key)
         .cookie_name("APP_AUTHEN_SESSION_KEY".to_string())
-        .session_lifecycle(PersistentSession::default().session_ttl(Duration::days(1 /*1 day*/)))
+        .session_lifecycle(
+            PersistentSession::default().session_ttl(Duration::minutes(15 /*1 day*/)),
+        )
         .cookie_secure(use_cookie_ssl)
+        //.cookie_content_security(CookieContentSecurity::Private)
         .cookie_same_site(SameSite::None)
         .cookie_http_only(true)
         .build()
@@ -713,7 +706,7 @@ async fn main() -> std::io::Result<()> {
         .unwrap();
 
     hbars.register_helper("access_token_validator",
-                               Box::new(|h: &Helper, r: &Handlebars, _: &Context, rc: &mut RenderContext, out: &mut dyn Output| -> HelperResult {
+                               Box::new(|h: &Helper, _r: &Handlebars, _: &Context, _rc: &mut RenderContext, out: &mut dyn Output| -> HelperResult {
                                    //let param = h.param(0).ok_or(RenderError::new("param not found"))?;
                                    //debug!("access_token_validator = {:?} , with ping_url = {:?}",param,param_ping_url);
                                    //out.write("3rd helper: ")?;
