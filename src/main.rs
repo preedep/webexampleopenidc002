@@ -8,10 +8,11 @@ use actix_session::config::{CookieContentSecurity, PersistentSession};
 use actix_session::storage::{RedisActorSessionStore, SessionStore};
 use actix_session::{Session, SessionExt, SessionMiddleware};
 use actix_web::middleware::Logger;
-use actix_web::web::{Data, Redirect};
+use actix_web::web::Data;
 use actix_web::{cookie, middleware, web, App, HttpResponse, HttpServer, Responder};
 use std::fmt::Write;
 use std::io::ErrorKind::Other;
+use std::os::unix::raw::time_t;
 use std::thread::panicking;
 
 use crate::entities::{
@@ -20,6 +21,7 @@ use crate::entities::{
 };
 use actix_web::cookie::time::Duration;
 use actix_web::cookie::SameSite;
+use actix_web::http::header::LOCATION;
 use handlebars::{
     Context, Handlebars, Helper, HelperResult, JsonRender, Output, RenderContext, RenderError,
 };
@@ -28,7 +30,11 @@ use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, TokenData, Val
 use log::{debug, error, info};
 use oauth2::basic::{BasicClient, BasicTokenResponse, BasicTokenType};
 use oauth2::reqwest::async_http_client;
-use oauth2::{AccessToken, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, EmptyExtraTokenFields, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, ResponseType, Scope, TokenResponse, TokenUrl, RequestTokenError};
+use oauth2::{
+    AccessToken, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
+    EmptyExtraTokenFields, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, RequestTokenError,
+    ResponseType, Scope, TokenResponse, TokenUrl,
+};
 use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
 use serde_json::json;
@@ -72,11 +78,9 @@ fn get_code_verifier_from_session(
 ///
 /// Validate JWT Token
 ///
-fn jwt_token_validation<T>(
-    jwt_token: &str,
-    jwks: &JWKS,
-) -> Result<TokenData<T>, Error>
-    where T : DeserializeOwned
+fn jwt_token_validation<T>(jwt_token: &str, jwks: &JWKS) -> Result<TokenData<T>, Error>
+where
+    T: DeserializeOwned,
 {
     let header = decode_header(jwt_token);
     match header {
@@ -104,35 +108,44 @@ fn jwt_token_validation<T>(
 ///
 /// Get Access Token
 ///
-async fn get_access_token( data: &web::Data<Config>,auth_code: &str,code_verifier: &str) -> Result<BasicTokenResponse,std::io::Error>{
+async fn get_access_token(
+    config: &web::Data<Config>,
+    auth_code: &str,
+    code_verifier: &str,
+) -> Result<BasicTokenResponse, std::io::Error> {
     let client = BasicClient::new(
-        ClientId::new(data.client_id.clone()),
-        Some(ClientSecret::new(data.client_secret.clone())),
+        ClientId::new(config.client_id.clone()),
+        Some(ClientSecret::new(config.client_secret.clone())),
         AuthUrl::new(
-            data.open_id_config
+            config
+                .open_id_config
                 .clone()
                 .unwrap()
                 .authorization_endpoint
                 .unwrap(),
         )
-            .unwrap(),
+        .unwrap(),
         Some(
             TokenUrl::new(
-                data.open_id_config.clone().unwrap().token_endpoint.unwrap(),
+                config
+                    .open_id_config
+                    .clone()
+                    .unwrap()
+                    .token_endpoint
+                    .unwrap(),
             )
-                .unwrap(),
+            .unwrap(),
         ),
     )
-        // Set the URL the user will be redirected to after the authorization process.
-        .set_redirect_uri(RedirectUrl::new(data.redirect.clone()).unwrap());
+    // Set the URL the user will be redirected to after the authorization process.
+    .set_redirect_uri(RedirectUrl::new(config.redirect.clone()).unwrap());
     info!("request access token ");
     let token_result = client
         .exchange_code(AuthorizationCode::new(auth_code.to_string()))
         .add_extra_param("code_verifier", code_verifier)
         .request_async(async_http_client)
-        .await.map_err(|e|{
-            std::io::Error::new(Other, e.to_string())
-    });
+        .await
+        .map_err(|e| std::io::Error::new(Other, e.to_string()));
     //debug!("token result > {:#?}", token_result);
     token_result
 }
@@ -157,7 +170,8 @@ async fn logout(
     session.purge();
     debug!("Session was purged");
     //let result = Uri::from_str(sign_out_url.as_str());
-    Redirect::to(sign_out_url).permanent()
+    //Redirect::to(sign_out_url).permanent()
+    redirect_to_page(&session, sign_out_url.as_str())
 }
 ///
 /// callback page with HTTP GET
@@ -165,9 +179,9 @@ async fn logout(
 async fn get_callback(
     session: Session,
     params: web::Query<ResponseAuthorized>,
-    data: web::Data<Config>,
+    config: web::Data<Config>,
 ) -> impl Responder {
-    callback(session, params.0, data).await
+    callback(session, params.0, config).await
 }
 ///
 /// callback page with HTTP POST
@@ -175,9 +189,27 @@ async fn get_callback(
 async fn post_callback(
     session: Session,
     params: web::Form<ResponseAuthorized>,
-    data: web::Data<Config>,
+    config: web::Data<Config>,
 ) -> impl Responder {
-    callback(session, params.0, data).await
+    callback(session, params.0, config).await
+}
+
+///
+///  redirect to error page
+///
+fn redirect_to_error_page(session: &Session, error: &ErrorInfo) -> HttpResponse {
+    session.insert(SESSION_KEY_ERROR, error).unwrap();
+    HttpResponse::SeeOther()
+        .insert_header((LOCATION, PAGE_ERROR))
+        .finish()
+}
+///
+/// redirect to page
+///
+fn redirect_to_page(session: &Session, page: &str) -> HttpResponse {
+    HttpResponse::SeeOther()
+        .insert_header((LOCATION, page))
+        .finish()
 }
 ///
 /// Callback
@@ -185,21 +217,15 @@ async fn post_callback(
 async fn callback(
     session: Session,
     params: ResponseAuthorized,
-    data: web::Data<Config>,
-) -> impl Responder {
+    config: web::Data<Config>,
+) -> HttpResponse {
     debug!("Callback > {:#?}", params);
-    match params.state {
-        None => {
-            session
-                .insert(
-                    SESSION_KEY_ERROR,
-                    ErrorInfo::new(StatusCode::BAD_REQUEST)
-                        .set_error_message(format!("{}", "State Is None")),
-                )
-                .unwrap();
-            return Redirect::to(PAGE_ERROR).permanent();
-        }
-        Some(_) => {}
+    if params.state.is_none() {
+        return redirect_to_error_page(
+            &session,
+            &ErrorInfo::new(StatusCode::BAD_REQUEST)
+                .set_error_message(format!("{}", "State Is None")),
+        );
     }
     return match get_code_verifier_from_session(&session, params.state.clone().unwrap()) {
         Ok(verifier) => {
@@ -208,7 +234,7 @@ async fn callback(
                 //verify id_token
                 let result = jwt_token_validation::<JwtPayloadIDToken>(
                     &params.id_token.clone().unwrap(),
-                    &data.jwks.clone().unwrap(),
+                    &config.jwks.clone().unwrap(),
                 );
                 match result {
                     Ok(token) => {
@@ -225,60 +251,50 @@ async fn callback(
                             )
                             .unwrap();
                         debug!("Insert ACCESS_KEY Successful ");
-                        Redirect::to(PAGE_PROFILE).permanent()
+                        redirect_to_page(&session, PAGE_PROFILE)
                     }
-                    Err(e) => {
-                        session
-                            .insert(
-                                SESSION_KEY_ERROR,
-                                ErrorInfo::new(StatusCode::BAD_REQUEST)
-                                    .set_error_message(format!("{}", e)),
-                            )
-                            .unwrap();
-                        Redirect::to(PAGE_ERROR).permanent()
-                    }
+                    Err(e) => redirect_to_error_page(
+                        &session,
+                        &ErrorInfo::new(StatusCode::BAD_REQUEST)
+                            .set_error_message(format!("{}", e)),
+                    ),
                 }
             } else if params.id_token.is_some() && params.code.is_some() {
                 //id_token + auth code
                 //verify id_token
                 let result = jwt_token_validation::<JwtPayloadIDToken>(
                     &params.id_token.clone().unwrap(),
-                    &data.jwks.clone().unwrap(),
+                    &config.jwks.clone().unwrap(),
                 );
                 match result {
                     Ok(token) => {
                         let _ = session.insert(SESSION_KEY_ID_TOKEN, token.claims);
                         debug!("Insert ID_TOKEN_KEY Successful ");
-                        let result_access =
-                            get_access_token(&data,params.code.unwrap().as_str(),verifier.unwrap().secret().as_str()).await;
+                        let result_access = get_access_token(
+                            &config,
+                            params.code.unwrap().as_str(),
+                            verifier.unwrap().secret().as_str(),
+                        )
+                        .await;
                         match result_access {
                             Ok(token) => {
                                 let _ = session.insert(SESSION_KEY_ACCESS_TOKEN, token);
                                 debug!("Insert ACCESS_KEY Successful ");
-                                Redirect::to(PAGE_PROFILE).permanent()
+                                //Redirect::to(PAGE_PROFILE).permanent()
+                                redirect_to_page(&session, PAGE_PROFILE)
                             }
-                            Err(e) => {
-                                session
-                                  .insert(
-                                        SESSION_KEY_ERROR,
-                                        ErrorInfo::new(StatusCode::BAD_REQUEST)
-                                          .set_error_message(format!("{}", e)),
-                                    )
-                                  .unwrap();
-                                Redirect::to(PAGE_ERROR).permanent()
-                            }
+                            Err(e) => redirect_to_error_page(
+                                &session,
+                                &ErrorInfo::new(StatusCode::BAD_REQUEST)
+                                    .set_error_message(format!("{}", e)),
+                            ),
                         }
                     }
-                    Err(e) => {
-                        session
-                            .insert(
-                                SESSION_KEY_ERROR,
-                                ErrorInfo::new(StatusCode::BAD_REQUEST)
-                                    .set_error_message(format!("{}", e)),
-                            )
-                            .unwrap();
-                        Redirect::to(PAGE_ERROR).permanent()
-                    }
+                    Err(e) => redirect_to_error_page(
+                        &session,
+                        &ErrorInfo::new(StatusCode::BAD_REQUEST)
+                            .set_error_message(format!("{}", e)),
+                    ),
                 }
             } else if params.id_token.is_some() {
                 //id_token
@@ -286,67 +302,56 @@ async fn callback(
                 //example for verify JWT signature
                 let result = jwt_token_validation::<JwtPayloadIDToken>(
                     &params.id_token.clone().unwrap(),
-                    &data.jwks.clone().unwrap(),
+                    &config.jwks.clone().unwrap(),
                 );
                 match result {
                     Ok(token) => {
                         let _ = session.insert(SESSION_KEY_ID_TOKEN, token.claims);
                         debug!("Insert ID_TOKEN_KEY Successful ");
-                        Redirect::to(PAGE_PROFILE).permanent()
+                        //Redirect::to(PAGE_PROFILE).permanent()
+                        redirect_to_page(&session, PAGE_PROFILE)
                     }
-                    Err(e) => {
-                        session
-                            .insert(
-                                SESSION_KEY_ERROR,
-                                ErrorInfo::new(StatusCode::BAD_REQUEST)
-                                    .set_error_message(format!("{}", e)),
-                            )
-                            .unwrap();
-                        Redirect::to(PAGE_ERROR).permanent()
-                    }
+                    Err(e) => redirect_to_error_page(
+                        &session,
+                        &ErrorInfo::new(StatusCode::BAD_REQUEST)
+                            .set_error_message(format!("{}", e)),
+                    ),
                 }
                 ////////////////////////////////
             } else if params.code.is_some() {
                 //code
-                let result_access =
-                    get_access_token(&data,params.code.unwrap().as_str(),verifier.unwrap().secret().as_str()).await;
+                let result_access = get_access_token(
+                    &config,
+                    params.code.unwrap().as_str(),
+                    verifier.unwrap().secret().as_str(),
+                )
+                .await;
                 match result_access {
                     Ok(token) => {
                         let _ = session.insert(SESSION_KEY_ACCESS_TOKEN, token);
                         debug!("Insert ACCESS_KEY Successful ");
-                        Redirect::to(PAGE_PROFILE).permanent()
+                        redirect_to_page(&session, PAGE_PROFILE)
                     }
-                    Err(e) => {
-                        session
-                            .insert(
-                                SESSION_KEY_ERROR,
-                                ErrorInfo::new(StatusCode::BAD_REQUEST)
-                                    .set_error_message(format!("{}", e)),
-                            )
-                            .unwrap();
-                        Redirect::to(PAGE_ERROR).permanent()
-                    }
+                    Err(e) => redirect_to_error_page(
+                        &session,
+                        &ErrorInfo::new(StatusCode::BAD_REQUEST)
+                            .set_error_message(format!("{}", e)),
+                    ),
                 }
             } else {
-                session
-                    .insert(
-                        SESSION_KEY_ERROR,
-                        ErrorInfo::new(StatusCode::BAD_REQUEST)
-                            .set_error_message(format!("{}", "Grant type unknown")),
-                    )
-                    .unwrap();
-                Redirect::to(PAGE_ERROR).permanent()
+                redirect_to_error_page(
+                    &session,
+                    &ErrorInfo::new(StatusCode::BAD_REQUEST)
+                        .set_error_message(format!("{}", "Grant type unknown")),
+                )
             }
         }
         Err(e) => {
             error!("Session Error {}", e);
-            session
-                .insert(
-                    SESSION_KEY_ERROR,
-                    ErrorInfo::new(StatusCode::UNAUTHORIZED).set_error_message(format!("{}", e)),
-                )
-                .unwrap();
-            Redirect::to(PAGE_ERROR).permanent()
+            redirect_to_error_page(
+                &session,
+                &ErrorInfo::new(StatusCode::UNAUTHORIZED).set_error_message(format!("{}", e)),
+            )
         }
     };
 }
@@ -448,11 +453,13 @@ async fn login(
                 session.status(),
                 session.entries()
             );
-            debug!("Try to redirect");
-            Redirect::to(auth_url).permanent()
+            //debug!("Try to redirect");
+            //Redirect::to(auth_url).permanent()
+            redirect_to_page(&session, auth_url.as_str())
         }
         Err(e) => {
             error!("save session error : {}", e);
+            /*
             session
                 .insert(
                     SESSION_KEY_ERROR,
@@ -460,6 +467,12 @@ async fn login(
                 )
                 .unwrap();
             Redirect::to(PAGE_ERROR).permanent()
+
+             */
+            redirect_to_error_page(
+                &session,
+                &ErrorInfo::new(StatusCode::UNAUTHORIZED).set_error_message(format!("{}", e)),
+            )
         }
     }
 }
