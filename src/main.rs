@@ -69,11 +69,15 @@ fn get_code_verifier_from_session(
     }
     Err(MyAppError::new(format!("Key [{}] No Value ", key)))
 }
-
-fn jwt_token_validation<T: DeserializeOwned>(
+///
+/// Validate JWT Token
+///
+fn jwt_token_validation<T>(
     jwt_token: &str,
     jwks: &JWKS,
-) -> Result<TokenData<T>, Error> {
+) -> Result<TokenData<T>, Error>
+    where T : DeserializeOwned
+{
     let header = decode_header(jwt_token);
     match header {
         Ok(h) => match get_jwks_item(jwks, h.kid.unwrap().as_str()) {
@@ -97,6 +101,9 @@ fn jwt_token_validation<T: DeserializeOwned>(
         Err(e) => Err(e),
     }
 }
+///
+/// Get Access Token
+///
 async fn get_access_token( data: &web::Data<Config>,auth_code: &str,code_verifier: &str) -> Result<BasicTokenResponse,std::io::Error>{
     let client = BasicClient::new(
         ClientId::new(data.client_id.clone()),
@@ -172,7 +179,6 @@ async fn post_callback(
 ) -> impl Responder {
     callback(session, params.0, data).await
 }
-
 ///
 /// Callback
 ///
