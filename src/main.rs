@@ -4,16 +4,14 @@ use actix_web::dev::Service as _;
 use futures_util::future::FutureExt;
 
 use actix_files::Files;
-use actix_session::config::{PersistentSession};
-use actix_session::storage::{RedisActorSessionStore};
+use actix_session::config::PersistentSession;
+use actix_session::storage::RedisActorSessionStore;
 use actix_session::{Session, SessionMiddleware};
 use actix_web::middleware::Logger;
 use actix_web::web::Data;
 use actix_web::{cookie, middleware, web, App, HttpResponse, HttpServer, Responder};
 
 use std::io::ErrorKind::Other;
-
-
 
 use crate::entities::{
     Config, ErrorInfo, GraphMe, JWKSKeyItem, JwtAccessToken, JwtPayloadIDToken, LoginQueryString,
@@ -22,9 +20,7 @@ use crate::entities::{
 use actix_web::cookie::time::Duration;
 use actix_web::cookie::SameSite;
 use actix_web::http::header::LOCATION;
-use handlebars::{
-    Context, Handlebars, Helper, HelperResult,  Output, RenderContext, RenderError,
-};
+use handlebars::{Context, Handlebars, Helper, HelperResult, Output, RenderContext, RenderError};
 use jsonwebtoken::errors::{Error, ErrorKind};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, TokenData, Validation};
 use log::{debug, error, info};
@@ -32,8 +28,8 @@ use oauth2::basic::{BasicClient, BasicTokenResponse, BasicTokenType};
 use oauth2::reqwest::async_http_client;
 use oauth2::{
     AccessToken, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
-    EmptyExtraTokenFields, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl,
-    ResponseType, Scope, TokenResponse, TokenUrl,
+    EmptyExtraTokenFields, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, ResponseType, Scope,
+    TokenResponse, TokenUrl,
 };
 use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
@@ -51,7 +47,9 @@ const PAGE_ERROR: &str = "/error";
 ///
 fn get_jwks_item(jwks: &JWKS, kid: &str) -> Option<JWKSKeyItem> {
     for item in jwks.keys.iter() {
-        let found_item = item.iter().find(|&key|key.kid.clone().unwrap_or("".to_string()).eq(kid));
+        let found_item = item
+            .iter()
+            .find(|&key| key.kid.clone().unwrap_or("".to_string()).eq(kid));
         if let Some(found_item) = found_item {
             return Some(found_item.clone());
         }
