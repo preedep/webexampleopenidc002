@@ -46,16 +46,17 @@ const SESSION_KEY_ACCESS_TOKEN: &str = "ACCESS_TOKEN";
 const PAGE_PROFILE: &str = "/profile";
 const PAGE_ERROR: &str = "/error";
 
+///
+/// Get JWKS Item by kid
+///
 fn get_jwks_item(jwks: &JWKS, kid: &str) -> Option<JWKSKeyItem> {
-    jwks.keys.iter().find_map(|items| {
-        items.iter().find_map(|item| {
-            if item.kid.clone().unwrap_or("".to_string()).eq(kid) {
-                Some(item.clone())
-            } else {
-                None
-            }
-        })
-    })
+    for item in jwks.keys.iter() {
+        let found_item = item.iter().find(|&key|key.kid.clone().unwrap_or("".to_string()).eq(kid));
+        if let Some(found_item) = found_item {
+            return Some(found_item.clone());
+        }
+    }
+    None
 }
 ///
 /// Function get code verifier
