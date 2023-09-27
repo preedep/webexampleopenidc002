@@ -28,4 +28,9 @@ futures-util = "0.3"
 opentelemetry-application-insights = {version = "0.27" ,default-features = false , features = ["reqwest-client-rustls","metrics"]}
 opentelemetry = {version = "0.20", features = ["rt-tokio","metrics"]}
 actix-web-opentelemetry = "0.15"
+tracing = "0.1"
+tracing-attributes = "0.1"
+tracing-futures = "0.2"
+tracing-opentelemetry = "0.21"
+tracing-subscriber = {version = "0.3"}
 

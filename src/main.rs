@@ -37,6 +37,11 @@ use serde_json::json;
 
 use actix_web_opentelemetry::RequestTracing;
 
+use tracing::Span;
+use tracing_attributes::instrument;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
+use tracing_subscriber::{layer::SubscriberExt, Registry};
+
 const SESSION_KEY_ID_TOKEN: &str = "ID_TOKEN_KEY";
 const SESSION_KEY_ERROR: &str = "ERROR_KEY";
 const SESSION_KEY_ACCESS_TOKEN: &str = "ACCESS_TOKEN";
@@ -47,6 +52,7 @@ const PAGE_ERROR: &str = "/error";
 ///
 /// Get JWKS Item by kid
 ///
+#[instrument(level = "debug")]
 fn get_jwks_item(jwks: &JWKS, kid: &str) -> Option<JWKSKeyItem> {
     for item in jwks.keys.iter() {
         let found_item = item
@@ -61,6 +67,7 @@ fn get_jwks_item(jwks: &JWKS, kid: &str) -> Option<JWKSKeyItem> {
 ///
 /// Function get code verifier
 ///
+//#[instrument]
 fn get_code_verifier_from_session(
     session: &Session,
     key: String,
@@ -79,6 +86,8 @@ fn get_code_verifier_from_session(
 ///
 /// Validate JWT Token
 ///
+//#[instrument]
+#[instrument(level = "debug")]
 fn jwt_token_validation<T>(jwt_token: &str, jwks: &JWKS) -> Result<TokenData<T>, Error>
 where
     T: DeserializeOwned,
@@ -109,6 +118,7 @@ where
 ///
 /// Get Access Token
 ///
+//#[instrument]
 async fn get_access_token(
     config: &web::Data<Config>,
     auth_code: &str,
@@ -153,6 +163,7 @@ async fn get_access_token(
 ///
 /// Logout
 ///
+//#[instrument]
 async fn logout(
     session: Session,
     _params: web::Query<ResponseAuthorized>,
@@ -177,6 +188,7 @@ async fn logout(
 ///
 /// callback page with HTTP GET
 ///
+//#[instrument]
 async fn get_callback(
     session: Session,
     params: web::Query<ResponseAuthorized>,
@@ -187,6 +199,7 @@ async fn get_callback(
 ///
 /// callback page with HTTP POST
 ///
+//#[instrument]
 async fn post_callback(
     session: Session,
     params: web::Form<ResponseAuthorized>,
@@ -198,6 +211,7 @@ async fn post_callback(
 ///
 ///  redirect to error page
 ///
+//#[instrument]
 fn redirect_to_error_page(session: &Session, error: &ErrorInfo) -> HttpResponse {
     session.insert(SESSION_KEY_ERROR, error).unwrap();
     HttpResponse::SeeOther()
@@ -207,6 +221,7 @@ fn redirect_to_error_page(session: &Session, error: &ErrorInfo) -> HttpResponse 
 ///
 /// redirect to page
 ///
+//#[instrument]
 fn redirect_to_page(_session: &Session, page: &str) -> HttpResponse {
     HttpResponse::SeeOther()
         .insert_header((LOCATION, page))
@@ -215,6 +230,7 @@ fn redirect_to_page(_session: &Session, page: &str) -> HttpResponse {
 ///
 /// Callback
 ///
+//#[instrument]
 async fn callback(
     session: Session,
     params: ResponseAuthorized,
@@ -359,6 +375,7 @@ async fn callback(
 ///
 ///  Login
 ///
+//#[instrument]
 async fn login(
     session: Session,
     params: web::Query<LoginQueryString>,
@@ -470,6 +487,7 @@ async fn login(
 ///
 ///  main page
 ///
+//#[instrument]
 async fn index(
     _session: Session,
     _data: web::Data<Config>,
@@ -487,6 +505,7 @@ async fn index(
 ///
 ///  profile page
 ///
+//#[instrument]
 async fn profile(
     session: Session,
     data: web::Data<Config>,
@@ -576,6 +595,7 @@ async fn profile(
 ///
 ///  profile page
 ///
+//#[instrument]
 async fn error_display(
     session: Session,
     _data: web::Data<Config>,
@@ -600,6 +620,7 @@ async fn error_display(
     let body = hb.render("error", &data).unwrap();
     HttpResponse::Ok().body(body)
 }
+//#[instrument]
 fn middle_ware_session(
     redis_connection: &str,
     private_key: cookie::Key,
@@ -663,12 +684,16 @@ async fn main() -> std::io::Result<()>{
     match app_insights_connection_str {
         Ok(app_insights_connection_str) => {
             debug!("APPLICATIONINSIGHTS_CON_STRING = {}",app_insights_connection_str);
-            let _exporter = opentelemetry_application_insights::new_pipeline_from_connection_string(
+            let exporter = opentelemetry_application_insights::new_pipeline_from_connection_string(
                 app_insights_connection_str
             ).unwrap().with_client(
                 reqwest::Client::new()
             )
                 .install_batch(opentelemetry::runtime::Tokio);
+
+            let telemetry = tracing_opentelemetry::layer().with_tracer(exporter);
+            let subscriber = Registry::default().with(telemetry);
+            tracing::subscriber::set_global_default(subscriber).expect("setting global default failed");
 
         }
         Err(e) => {
