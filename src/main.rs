@@ -35,6 +35,8 @@ use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
 use serde_json::json;
 
+use actix_web_opentelemetry::RequestTracing;
+
 const SESSION_KEY_ID_TOKEN: &str = "ID_TOKEN_KEY";
 const SESSION_KEY_ERROR: &str = "ERROR_KEY";
 const SESSION_KEY_ACCESS_TOKEN: &str = "ACCESS_TOKEN";
@@ -619,12 +621,14 @@ fn middle_ware_session(
 /// Main app
 ///
 #[actix_web::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> std::io::Result<()>{
     pretty_env_logger::init();
     info!("Server starting...");
     //
     //  Load environment variable
     //
+    let app_insights_connection_str = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING");
+
     let redis_url = std::env::var("REDIS_URL").unwrap();
     let redis_auth_key = std::env::var("REDIS_AUTH_KEY").unwrap();
     let tenant_id = std::env::var("TENANT_ID").unwrap();
@@ -656,6 +660,18 @@ async fn main() -> std::io::Result<()> {
     debug!("Get configuration from env complete");
     debug!("Cookie SSL : {}", use_cookie_ssl);
 
+    match app_insights_connection_str {
+        Ok(app_insights_connection_str) => {
+            let _exporter = opentelemetry_application_insights::new_pipeline_from_connection_string(
+                app_insights_connection_str
+            ).unwrap().with_client(reqwest::Client::new())
+                .install_batch(opentelemetry::runtime::Tokio);
+
+        }
+        Err(e) => {
+            error!("Application Insights connection string error {}", e);
+        }
+    }
     //
     // Get azure ad meta data
     //
@@ -774,7 +790,7 @@ async fn main() -> std::io::Result<()> {
                 redis_connection.as_str(),
                 private_key.clone(),
                 use_cookie_ssl,
-            ))
+            )).wrap(RequestTracing::new())
             //.wrap(RedirectHttps::with_hsts(StrictTransportSecurity::default()))
             .route("/", web::get().to(index))
             .route("/login", web::get().to(login))
@@ -800,5 +816,8 @@ async fn main() -> std::io::Result<()> {
     .workers(20)
     .bind(("0.0.0.0", 8080))?
     .run()
-    .await
+    .await?;
+
+    //opentelemetry::global::shutdown_tracer_provider();
+    Ok(())
 }
