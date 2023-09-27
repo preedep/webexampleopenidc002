@@ -42,6 +42,8 @@ use tracing_attributes::instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use tracing_subscriber::{layer::SubscriberExt, Registry};
 
+use tracing_actix_web::TracingLogger;
+
 const SESSION_KEY_ID_TOKEN: &str = "ID_TOKEN_KEY";
 const SESSION_KEY_ERROR: &str = "ERROR_KEY";
 const SESSION_KEY_ACCESS_TOKEN: &str = "ACCESS_TOKEN";
@@ -68,6 +70,7 @@ fn get_jwks_item(jwks: &JWKS, kid: &str) -> Option<JWKSKeyItem> {
 /// Function get code verifier
 ///
 //#[instrument]
+#[instrument(skip(session))]
 fn get_code_verifier_from_session(
     session: &Session,
     key: String,
@@ -119,6 +122,7 @@ where
 /// Get Access Token
 ///
 //#[instrument]
+#[instrument(level = "debug")]
 async fn get_access_token(
     config: &web::Data<Config>,
     auth_code: &str,
@@ -164,6 +168,7 @@ async fn get_access_token(
 /// Logout
 ///
 //#[instrument]
+#[instrument(skip(session))]
 async fn logout(
     session: Session,
     _params: web::Query<ResponseAuthorized>,
@@ -189,6 +194,7 @@ async fn logout(
 /// callback page with HTTP GET
 ///
 //#[instrument]
+#[instrument(skip(session))]
 async fn get_callback(
     session: Session,
     params: web::Query<ResponseAuthorized>,
@@ -200,6 +206,7 @@ async fn get_callback(
 /// callback page with HTTP POST
 ///
 //#[instrument]
+#[instrument(skip(session))]
 async fn post_callback(
     session: Session,
     params: web::Form<ResponseAuthorized>,
@@ -212,6 +219,7 @@ async fn post_callback(
 ///  redirect to error page
 ///
 //#[instrument]
+#[instrument(skip(session))]
 fn redirect_to_error_page(session: &Session, error: &ErrorInfo) -> HttpResponse {
     session.insert(SESSION_KEY_ERROR, error).unwrap();
     HttpResponse::SeeOther()
@@ -222,6 +230,7 @@ fn redirect_to_error_page(session: &Session, error: &ErrorInfo) -> HttpResponse 
 /// redirect to page
 ///
 //#[instrument]
+#[instrument(skip(_session))]
 fn redirect_to_page(_session: &Session, page: &str) -> HttpResponse {
     HttpResponse::SeeOther()
         .insert_header((LOCATION, page))
@@ -231,6 +240,7 @@ fn redirect_to_page(_session: &Session, page: &str) -> HttpResponse {
 /// Callback
 ///
 //#[instrument]
+#[instrument(skip(session))]
 async fn callback(
     session: Session,
     params: ResponseAuthorized,
@@ -376,6 +386,7 @@ async fn callback(
 ///  Login
 ///
 //#[instrument]
+#[instrument(skip(session))]
 async fn login(
     session: Session,
     params: web::Query<LoginQueryString>,
@@ -488,6 +499,7 @@ async fn login(
 ///  main page
 ///
 //#[instrument]
+#[instrument(skip(_session))]
 async fn index(
     _session: Session,
     _data: web::Data<Config>,
@@ -506,6 +518,7 @@ async fn index(
 ///  profile page
 ///
 //#[instrument]
+#[instrument(skip(session))]
 async fn profile(
     session: Session,
     data: web::Data<Config>,
@@ -819,6 +832,7 @@ async fn main() -> std::io::Result<()>{
                 private_key.clone(),
                 use_cookie_ssl,
             )).wrap(RequestTracing::new())
+            .wrap(TracingLogger::default())
             //.wrap(RedirectHttps::with_hsts(StrictTransportSecurity::default()))
             .route("/", web::get().to(index))
             .route("/login", web::get().to(login))
