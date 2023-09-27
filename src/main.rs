@@ -4,16 +4,14 @@ use actix_web::dev::Service as _;
 use futures_util::future::FutureExt;
 
 use actix_files::Files;
-use actix_session::config::{PersistentSession};
-use actix_session::storage::{RedisActorSessionStore};
+use actix_session::config::PersistentSession;
+use actix_session::storage::RedisActorSessionStore;
 use actix_session::{Session, SessionMiddleware};
 use actix_web::middleware::Logger;
 use actix_web::web::Data;
 use actix_web::{cookie, middleware, web, App, HttpResponse, HttpServer, Responder};
 
 use std::io::ErrorKind::Other;
-
-
 
 use crate::entities::{
     Config, ErrorInfo, GraphMe, JWKSKeyItem, JwtAccessToken, JwtPayloadIDToken, LoginQueryString,
@@ -22,9 +20,7 @@ use crate::entities::{
 use actix_web::cookie::time::Duration;
 use actix_web::cookie::SameSite;
 use actix_web::http::header::LOCATION;
-use handlebars::{
-    Context, Handlebars, Helper, HelperResult,  Output, RenderContext, RenderError,
-};
+use handlebars::{Context, Handlebars, Helper, HelperResult, Output, RenderContext, RenderError};
 use jsonwebtoken::errors::{Error, ErrorKind};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, TokenData, Validation};
 use log::{debug, error, info};
@@ -32,12 +28,19 @@ use oauth2::basic::{BasicClient, BasicTokenResponse, BasicTokenType};
 use oauth2::reqwest::async_http_client;
 use oauth2::{
     AccessToken, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
-    EmptyExtraTokenFields, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl,
-    ResponseType, Scope, TokenResponse, TokenUrl,
+    EmptyExtraTokenFields, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, ResponseType, Scope,
+    TokenResponse, TokenUrl,
 };
 use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
 use serde_json::json;
+
+use actix_web_opentelemetry::RequestTracing;
+
+use tracing::Span;
+use tracing_attributes::instrument;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
+use tracing_subscriber::{layer::SubscriberExt, Registry};
 
 const SESSION_KEY_ID_TOKEN: &str = "ID_TOKEN_KEY";
 const SESSION_KEY_ERROR: &str = "ERROR_KEY";
@@ -49,9 +52,12 @@ const PAGE_ERROR: &str = "/error";
 ///
 /// Get JWKS Item by kid
 ///
+#[instrument(level = "debug")]
 fn get_jwks_item(jwks: &JWKS, kid: &str) -> Option<JWKSKeyItem> {
     for item in jwks.keys.iter() {
-        let found_item = item.iter().find(|&key|key.kid.clone().unwrap_or("".to_string()).eq(kid));
+        let found_item = item
+            .iter()
+            .find(|&key| key.kid.clone().unwrap_or("".to_string()).eq(kid));
         if let Some(found_item) = found_item {
             return Some(found_item.clone());
         }
@@ -61,6 +67,7 @@ fn get_jwks_item(jwks: &JWKS, kid: &str) -> Option<JWKSKeyItem> {
 ///
 /// Function get code verifier
 ///
+//#[instrument]
 fn get_code_verifier_from_session(
     session: &Session,
     key: String,
@@ -79,6 +86,8 @@ fn get_code_verifier_from_session(
 ///
 /// Validate JWT Token
 ///
+//#[instrument]
+#[instrument(level = "debug")]
 fn jwt_token_validation<T>(jwt_token: &str, jwks: &JWKS) -> Result<TokenData<T>, Error>
 where
     T: DeserializeOwned,
@@ -109,6 +118,7 @@ where
 ///
 /// Get Access Token
 ///
+//#[instrument]
 async fn get_access_token(
     config: &web::Data<Config>,
     auth_code: &str,
@@ -153,6 +163,7 @@ async fn get_access_token(
 ///
 /// Logout
 ///
+//#[instrument]
 async fn logout(
     session: Session,
     _params: web::Query<ResponseAuthorized>,
@@ -177,6 +188,7 @@ async fn logout(
 ///
 /// callback page with HTTP GET
 ///
+//#[instrument]
 async fn get_callback(
     session: Session,
     params: web::Query<ResponseAuthorized>,
@@ -187,6 +199,7 @@ async fn get_callback(
 ///
 /// callback page with HTTP POST
 ///
+//#[instrument]
 async fn post_callback(
     session: Session,
     params: web::Form<ResponseAuthorized>,
@@ -198,6 +211,7 @@ async fn post_callback(
 ///
 ///  redirect to error page
 ///
+//#[instrument]
 fn redirect_to_error_page(session: &Session, error: &ErrorInfo) -> HttpResponse {
     session.insert(SESSION_KEY_ERROR, error).unwrap();
     HttpResponse::SeeOther()
@@ -207,6 +221,7 @@ fn redirect_to_error_page(session: &Session, error: &ErrorInfo) -> HttpResponse 
 ///
 /// redirect to page
 ///
+//#[instrument]
 fn redirect_to_page(_session: &Session, page: &str) -> HttpResponse {
     HttpResponse::SeeOther()
         .insert_header((LOCATION, page))
@@ -215,6 +230,7 @@ fn redirect_to_page(_session: &Session, page: &str) -> HttpResponse {
 ///
 /// Callback
 ///
+//#[instrument]
 async fn callback(
     session: Session,
     params: ResponseAuthorized,
@@ -359,6 +375,7 @@ async fn callback(
 ///
 ///  Login
 ///
+//#[instrument]
 async fn login(
     session: Session,
     params: web::Query<LoginQueryString>,
@@ -470,6 +487,7 @@ async fn login(
 ///
 ///  main page
 ///
+//#[instrument]
 async fn index(
     _session: Session,
     _data: web::Data<Config>,
@@ -487,6 +505,7 @@ async fn index(
 ///
 ///  profile page
 ///
+//#[instrument]
 async fn profile(
     session: Session,
     data: web::Data<Config>,
@@ -576,6 +595,7 @@ async fn profile(
 ///
 ///  profile page
 ///
+//#[instrument]
 async fn error_display(
     session: Session,
     _data: web::Data<Config>,
@@ -600,6 +620,7 @@ async fn error_display(
     let body = hb.render("error", &data).unwrap();
     HttpResponse::Ok().body(body)
 }
+//#[instrument]
 fn middle_ware_session(
     redis_connection: &str,
     private_key: cookie::Key,
@@ -621,12 +642,14 @@ fn middle_ware_session(
 /// Main app
 ///
 #[actix_web::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> std::io::Result<()>{
     pretty_env_logger::init();
     info!("Server starting...");
     //
     //  Load environment variable
     //
+    let app_insights_connection_str = std::env::var("APPLICATIONINSIGHTS_CON_STRING");
+
     let redis_url = std::env::var("REDIS_URL").unwrap();
     let redis_auth_key = std::env::var("REDIS_AUTH_KEY").unwrap();
     let tenant_id = std::env::var("TENANT_ID").unwrap();
@@ -658,6 +681,25 @@ async fn main() -> std::io::Result<()> {
     debug!("Get configuration from env complete");
     debug!("Cookie SSL : {}", use_cookie_ssl);
 
+    match app_insights_connection_str {
+        Ok(app_insights_connection_str) => {
+            debug!("APPLICATIONINSIGHTS_CON_STRING = {}",app_insights_connection_str);
+            let exporter = opentelemetry_application_insights::new_pipeline_from_connection_string(
+                app_insights_connection_str
+            ).unwrap().with_client(
+                reqwest::Client::new()
+            )
+                .install_batch(opentelemetry::runtime::Tokio);
+
+            let telemetry = tracing_opentelemetry::layer().with_tracer(exporter);
+            let subscriber = Registry::default().with(telemetry);
+            tracing::subscriber::set_global_default(subscriber).expect("setting global default failed");
+
+        }
+        Err(e) => {
+            error!("Application Insights connection string error {}", e);
+        }
+    }
     //
     // Get azure ad meta data
     //
@@ -776,7 +818,7 @@ async fn main() -> std::io::Result<()> {
                 redis_connection.as_str(),
                 private_key.clone(),
                 use_cookie_ssl,
-            ))
+            )).wrap(RequestTracing::new())
             //.wrap(RedirectHttps::with_hsts(StrictTransportSecurity::default()))
             .route("/", web::get().to(index))
             .route("/login", web::get().to(login))
@@ -799,8 +841,11 @@ async fn main() -> std::io::Result<()> {
             .service(Files::new("static", "./static").prefer_utf8(true))
     })
     // .keep_alive(KeepAlive::from(std::time::Duration::from_millis(10 * 1000)))
-    .workers(20)
+    .workers(10)
     .bind(("0.0.0.0", 8080))?
     .run()
-    .await
+    .await?;
+
+    //opentelemetry::global::shutdown_tracer_provider();
+    Ok(())
 }

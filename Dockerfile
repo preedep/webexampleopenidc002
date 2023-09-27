@@ -34,6 +34,9 @@ update-ca-certificates
 RUN openssl s_client -connect login.microsoftonline.com:443 -showcerts </dev/null 2>/dev/null | sed -e '/-----BEGIN/,/-----END/!d' | tee "/etc/ssl/certs/ca-certificates.crt" >/dev/null && \
 update-ca-certificates
 
+RUN openssl s_client -connect southeastasia-1.in.applicationinsights.azure.com:443 -showcerts </dev/null 2>/dev/null | sed -e '/-----BEGIN/,/-----END/!d' | tee "/usr/local/share/ca-certificates/ca.crt" >/dev/null && \
+update-ca-certificates
+
 RUN addgroup -S myuser && adduser -S myuser -G myuser
 
 RUN mkdir app_example
