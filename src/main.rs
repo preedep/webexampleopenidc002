@@ -386,6 +386,7 @@ async fn callback(
 ///  Login
 ///
 //#[instrument]
+#[instrument(skip(session))]
 async fn login(
     session: Session,
     params: web::Query<LoginQueryString>,
@@ -498,6 +499,7 @@ async fn login(
 ///  main page
 ///
 //#[instrument]
+#[instrument(skip(_session))]
 async fn index(
     _session: Session,
     _data: web::Data<Config>,
@@ -516,6 +518,7 @@ async fn index(
 ///  profile page
 ///
 //#[instrument]
+#[instrument(skip(session))]
 async fn profile(
     session: Session,
     data: web::Data<Config>,
