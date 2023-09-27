@@ -627,7 +627,7 @@ async fn main() -> std::io::Result<()>{
     //
     //  Load environment variable
     //
-    let app_insights_connection_str = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING");
+    let app_insights_connection_str = std::env::var("APPLICATIONINSIGHTS_CON_STRING");
 
     let redis_url = std::env::var("REDIS_URL").unwrap();
     let redis_auth_key = std::env::var("REDIS_AUTH_KEY").unwrap();
@@ -662,9 +662,12 @@ async fn main() -> std::io::Result<()>{
 
     match app_insights_connection_str {
         Ok(app_insights_connection_str) => {
+            debug!("APPLICATIONINSIGHTS_CON_STRING = {}",app_insights_connection_str);
             let _exporter = opentelemetry_application_insights::new_pipeline_from_connection_string(
                 app_insights_connection_str
-            ).unwrap().with_client(reqwest::Client::new())
+            ).unwrap().with_client(
+                reqwest::Client::new()
+            )
                 .install_batch(opentelemetry::runtime::Tokio);
 
         }
@@ -813,7 +816,7 @@ async fn main() -> std::io::Result<()>{
             .service(Files::new("static", "./static").prefer_utf8(true))
     })
     // .keep_alive(KeepAlive::from(std::time::Duration::from_millis(10 * 1000)))
-    .workers(20)
+    .workers(10)
     .bind(("0.0.0.0", 8080))?
     .run()
     .await?;
