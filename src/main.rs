@@ -186,8 +186,6 @@ async fn logout(
     debug!("redirect to url > {}", sign_out_url);
     session.purge();
     debug!("Session was purged");
-    //let result = Uri::from_str(sign_out_url.as_str());
-    //Redirect::to(sign_out_url).permanent()
     redirect_to_page(&session, sign_out_url.as_str())
 }
 ///
