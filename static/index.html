@@ -22,7 +22,7 @@
                             <div class="col-lg-10">
                                 <div class="card shadow-lg border-0 rounded-lg mt-10">
                                     <div class="card-header justify-content-center">
-                                        <h3 class="font-weight-light my-4">Login with Azure AD 1.38</h3></div>
+                                        <h3 class="font-weight-light my-4">Login with Azure AD 1.39</h3></div>
                                         <!--<button class="btn btn-primary btn-sm">Logout</button>-->
                                         <div class="card-body">
                                             <div class="row">
@@ -62,7 +62,7 @@
                                                             ** Resource หากในภาพ ก็คือ Web API <br/>
                                                             ** web api = MS Graph API (Ex. https://graph.microsoft.com/v1.0/me) <br/><br/>
 
-                                                            <div class="text-red font-weight-300;font-size"><a href="">ขั้นตอนการตั้งค่าใน Azure Portal (Download here)</a></div><br/>
+                                                            <div class="text-red font-weight-300;font-size"><a href="https://webopenidctutorial001.z23.web.core.windows.net/step_by_step.pdf">ขั้นตอนการตั้งค่าใน Azure Portal (Download here)</a></div><br/>
                                                             <div class="text-red font-weight-300;font-size"><a href="https://github.com/preedep/webexampleopenidc002">My Example Code [Github]</a></div>
                                                         </div>
                                                         <div class="tab-pane fade" id="idToken" role="tabpanel" aria-labelledby="id-token-btn-vertical">
@@ -79,7 +79,7 @@
                                                             </div><br/>
                                                             ตัวอย่าง Flow ของ Azure AD  <br/>
                                                             <img src="https://learn.microsoft.com/en-us/azure/active-directory/develop/media/v2-protocols-oidc/convergence-scenarios-webapp.svg" alt=""><br/>
-                                                            <div class="text-red font-weight-300;font-size"><a href="">ขั้นตอนการตั้งค่าใน Azure Portal (Download here)</a></div><br/>
+                                                            <div class="text-red font-weight-300;font-size"><a href="https://webopenidctutorial001.z23.web.core.windows.net/step_by_step.pdf">ขั้นตอนการตั้งค่าใน Azure Portal (Download here)</a></div><br/>
                                                             <div class="text-red font-weight-300;font-size"><a href="https://github.com/preedep/webexampleopenidc002">My Example Code [Github]</a></div>
                                                         </div>
                                                         <div class="tab-pane fade" id="hyBridge" role="tabpanel" aria-labelledby="implicit-id-token-auth-code-btn-vertical">
@@ -96,7 +96,7 @@
                                                             ตัวอย่าง Flow ของ API Protection <br/>
                                                             <img src="https://webopenidctutorial001.z23.web.core.windows.net/Api authentication pattern - Page 7.svg" width="100%"><br/>
 
-                                                            <div class="text-red font-weight-300;font-size"><a href="">ขั้นตอนการตั้งค่าใน Azure Portal (Download here)</a></div><br/>
+                                                            <div class="text-red font-weight-300;font-size"><a href="https://webopenidctutorial001.z23.web.core.windows.net/step_by_step.pdf">ขั้นตอนการตั้งค่าใน Azure Portal (Download here)</a></div><br/>
                                                             <div class="text-red font-weight-300;font-size"><a href="https://github.com/preedep/webexampleopenidc002">My Example Code [Github]</a></div><br/>
                                                             <div class="text-red font-weight-300;font-size"><a href="https://github.com/preedep/apiexampleopenidc001">My Example Code [MyAPI] [Github]</a></div><br/>
                                                         </div>
@@ -104,10 +104,16 @@
                                                             <h5 class="card-title">Implicit (ควรใช้น้อยสุด มีความเสี่ยงสูงสุด)
                                                                 <a class="btn btn-secondary btn-sm float-right font-weight-300" href="/login?response_type=id_token token">Login</a>
                                                             </h5>
-                                                            <p class="card-text">ID Token + Access Token (for MyAPI) <br/>
+                                                            <div class="text-red">ID Token และ Access Token (พร้อมใช้)  ในการเรียก MyAPI</div> <br/>
+                                                            <div class="font-weight-200;font-size: 12px">
+                                                                ในตัวอย่างนี้เป็นการ Combined 2 Flows (ID Token กับ Access Token) ซึ่งเป็นวิธีที่จะได้ ID Token และ Access Token ในเวลาเดียวกันเลย ซึ่งเป็น flow ที่ค่อนข้างมีความเสี่ยง (วิธีนี้ ไม่แนะนำให้ใช้ ถ้าไม่จำเป็น)
+                                                            </div><br/>
+                                                            ตัวอย่าง Flow ของ Azure AD  <br/>
                                                                 <img src="https://learn.microsoft.com/en-us/azure/active-directory/develop/media/v2-oauth2-implicit-grant-flow/convergence-scenarios-implicit.svg" alt="">
-                                                            </p>
 
+                                                            <div class="text-red font-weight-300;font-size"><a href="https://webopenidctutorial001.z23.web.core.windows.net/step_by_step.pdf">ขั้นตอนการตั้งค่าใน Azure Portal (Download here)</a></div><br/>
+                                                            <div class="text-red font-weight-300;font-size"><a href="https://github.com/preedep/webexampleopenidc002">My Example Code [Github]</a></div><br/>
+                                                            <div class="text-red font-weight-300;font-size"><a href="https://github.com/preedep/apiexampleopenidc001">My Example Code [MyAPI] [Github]</a></div><br/>
                                                         </div>
                                                     </div>
                                                 </div>
