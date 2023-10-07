@@ -20,14 +20,13 @@ use crate::utils::*;
 use actix_web::cookie::time::Duration;
 use actix_web::cookie::SameSite;
 use handlebars::{Context, Handlebars, Helper, HelperResult, Output, RenderContext, RenderError};
-use jsonwebtoken::{Algorithm, decode, DecodingKey, Validation};
+use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use log::{debug, error, info};
 use oauth2::basic::{BasicClient, BasicTokenResponse, BasicTokenType};
 use oauth2::reqwest::async_http_client;
 use oauth2::{
-    AccessToken, AuthUrl, ClientId, ClientSecret, CsrfToken,
-    EmptyExtraTokenFields, PkceCodeChallenge, RedirectUrl, ResponseType, Scope,
-    TokenResponse,
+    AccessToken, AuthUrl, ClientId, ClientSecret, CsrfToken, EmptyExtraTokenFields,
+    PkceCodeChallenge, RedirectUrl, ResponseType, Scope, TokenResponse,
 };
 use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
@@ -45,7 +44,6 @@ use tracing_actix_web::TracingLogger;
 const SESSION_KEY_ID_TOKEN: &str = "ID_TOKEN_KEY";
 const SESSION_KEY_ERROR: &str = "ERROR_KEY";
 const SESSION_KEY_ACCESS_TOKEN: &str = "ACCESS_TOKEN";
-
 
 ///
 /// Logout
@@ -95,7 +93,6 @@ async fn post_callback(
 ) -> impl Responder {
     callback(session, params.0, config).await
 }
-
 
 ///
 /// Callback
@@ -517,7 +514,7 @@ fn middle_ware_session(
 /// Main app
 ///
 #[actix_web::main]
-async fn main() -> std::io::Result<()>{
+async fn main() -> std::io::Result<()> {
     pretty_env_logger::init();
     info!("Server starting...");
     //
@@ -558,19 +555,22 @@ async fn main() -> std::io::Result<()>{
 
     match app_insights_connection_str {
         Ok(app_insights_connection_str) => {
-            debug!("APPLICATIONINSIGHTS_CON_STRING = {}",app_insights_connection_str);
-            let exporter = opentelemetry_application_insights::new_pipeline_from_connection_string(
+            debug!(
+                "APPLICATIONINSIGHTS_CON_STRING = {}",
                 app_insights_connection_str
-            ).unwrap().with_client(
-                reqwest::Client::new()
+            );
+            let exporter = opentelemetry_application_insights::new_pipeline_from_connection_string(
+                app_insights_connection_str,
             )
-                .with_service_name("WebExampleAzureAD")
-                .install_batch(opentelemetry::runtime::Tokio);
+            .unwrap()
+            .with_client(reqwest::Client::new())
+            .with_service_name("WebExampleAzureAD")
+            .install_batch(opentelemetry::runtime::Tokio);
 
             let telemetry = tracing_opentelemetry::layer().with_tracer(exporter);
             let subscriber = Registry::default().with(telemetry);
-            tracing::subscriber::set_global_default(subscriber).expect("setting global default failed");
-
+            tracing::subscriber::set_global_default(subscriber)
+                .expect("setting global default failed");
         }
         Err(e) => {
             error!("Application Insights connection string error {}", e);
@@ -694,7 +694,8 @@ async fn main() -> std::io::Result<()>{
                 redis_connection.as_str(),
                 private_key.clone(),
                 use_cookie_ssl,
-            )).wrap(RequestTracing::new())
+            ))
+            .wrap(RequestTracing::new())
             .wrap(TracingLogger::default())
             //.wrap(RedirectHttps::with_hsts(StrictTransportSecurity::default()))
             .route("/", web::get().to(index))

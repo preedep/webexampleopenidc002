@@ -1,24 +1,22 @@
-use std::io::ErrorKind::Other;
+use crate::entities::{Config, ErrorInfo, JWKSKeyItem, MyAppError, MyAppResult, JWKS};
+use crate::SESSION_KEY_ERROR;
 use actix_session::Session;
-use actix_web::{HttpResponse, web};
-use jsonwebtoken::{Algorithm, decode, decode_header, DecodingKey, TokenData, Validation};
+use actix_web::{web, HttpResponse};
 use jsonwebtoken::errors::{Error, ErrorKind};
+use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, TokenData, Validation};
 use log::{debug, info};
 use oauth2::basic::{BasicClient, BasicTokenResponse};
-use oauth2::{AuthorizationCode, AuthUrl, ClientId, ClientSecret, PkceCodeVerifier, RedirectUrl, TokenUrl};
 use oauth2::reqwest::async_http_client;
+use oauth2::{
+    AuthUrl, AuthorizationCode, ClientId, ClientSecret, PkceCodeVerifier, RedirectUrl, TokenUrl,
+};
 use reqwest::header::LOCATION;
 use serde::de::DeserializeOwned;
+use std::io::ErrorKind::Other;
 use tracing_attributes::instrument;
-use crate::entities::{Config, ErrorInfo, JWKS, JWKSKeyItem, MyAppError, MyAppResult};
-use crate::SESSION_KEY_ERROR;
-
-
 
 pub const PAGE_PROFILE: &str = "/profile";
 pub const PAGE_ERROR: &str = "/error";
-
-
 
 ///
 /// Get JWKS Item by kid
@@ -62,8 +60,8 @@ pub fn get_code_verifier_from_session(
 //#[instrument]
 #[instrument(level = "debug")]
 pub fn jwt_token_validation<T>(jwt_token: &str, jwks: &JWKS) -> Result<TokenData<T>, Error>
-    where
-        T: DeserializeOwned,
+where
+    T: DeserializeOwned,
 {
     let header = decode_header(jwt_token);
     match header {
@@ -76,7 +74,7 @@ pub fn jwt_token_validation<T>(jwt_token: &str, jwks: &JWKS) -> Result<TokenData
                         item.n.clone().unwrap().as_str(),
                         item.e.clone().unwrap().as_str(),
                     )
-                        .unwrap(),
+                    .unwrap(),
                     &Validation::new(Algorithm::RS256),
                 );
                 token
@@ -110,7 +108,7 @@ pub async fn get_access_token(
                 .authorization_endpoint
                 .unwrap(),
         )
-            .unwrap(),
+        .unwrap(),
         Some(
             TokenUrl::new(
                 config
@@ -120,11 +118,11 @@ pub async fn get_access_token(
                     .token_endpoint
                     .unwrap(),
             )
-                .unwrap(),
+            .unwrap(),
         ),
     )
-        // Set the URL the user will be redirected to after the authorization process.
-        .set_redirect_uri(RedirectUrl::new(config.redirect.clone()).unwrap());
+    // Set the URL the user will be redirected to after the authorization process.
+    .set_redirect_uri(RedirectUrl::new(config.redirect.clone()).unwrap());
     info!("request access token ");
     let token_result = client
         .exchange_code(AuthorizationCode::new(auth_code.to_string()))

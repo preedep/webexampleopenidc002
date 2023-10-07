@@ -42,7 +42,6 @@
                                                                     Login
                                                                 </a>
                                                             </h5>
-
                                                             <!--
                                                             <p class="card-text">Auth Code Flow + PKCE , Get user profile from MS Graph API <br/>
                                                                 <img src="https://learn.microsoft.com/en-us/azure/active-directory/develop/media/v2-oauth2-auth-code-flow/convergence-scenarios-native.svg" alt="">
@@ -54,7 +53,8 @@
                                                                  Authorization Code เป็นประเภทการให้สิทธิ์ลูกค้าเพื่อนำ Authorization code หรือเรียกกันสั้นๆว่า Auth code มาแลกเปลี่ยนเป็น Access token เพื่อให้ลูกค้าใช้ Access Token ในการเข้าใช้งาน Resource
                                                                 ตรงส่วนนี้ Server หรือผู้ให้บริการ และ Client ต้องคุยกันว่าจะแลกเปลี่ยน Auth code กันแล้วให้
                                                                 Server หรือผู้ให้บริการทำการ Redirect URL ไปยัง URL ใด เพื่อนำมาแลกเป็น Access Token <br/><br/>
-                                                                 PKCE (RFC 7636) เป็นส่วนต่อขยายของ Authorization Code flow เพื่อป้องกัน CSRF และ authorization code injection attacks. (ใน Azure AD มีรองรับ mode นี้)
+                                                                 PKCE (RFC 7636) เป็นส่วนต่อขยายของ Authorization Code flow เพื่อป้องกัน CSRF และ authorization code injection attacks. (ใน Azure AD มีรองรับ mode นี้) <br/><br/>
+                                                                 สำหรับในกรณีนี้ หากเราต้องการข้อมูลส่วนตัว เช่น ชื่อ นามสกุล รหัสพนักงาน เป็นต้น  จำเป็นต้องนำ Access Token ที่ได้ ไปใช้เพื่อ ร้องขอข้อมูลผ่านทาง MS Graph API
                                                              </div><br/>
                                                                 ตัวอย่าง Flow ของ Azure AD  <br/>
                                                             <img src="https://learn.microsoft.com/en-us/azure/active-directory/develop/media/v2-oauth2-auth-code-flow/convergence-scenarios-native.svg"
@@ -62,18 +62,25 @@
                                                             ** Resource หากในภาพ ก็คือ Web API <br/>
                                                             ** web api = MS Graph API (Ex. https://graph.microsoft.com/v1.0/me) <br/><br/>
 
-                                                            <div class="text-red font-weight-300;font-size">ขั้นตอนการตั้งค่าใน Azure Portal</div><br/>
+                                                            <div class="text-red font-weight-300;font-size"><a href="">ขั้นตอนการตั้งค่าใน Azure Portal (Download here)</a></div><br/>
                                                             <div class="text-red font-weight-300;font-size"><a href="https://github.com/preedep/webexampleopenidc002">My Example Code [Github]</a></div>
                                                         </div>
                                                         <div class="tab-pane fade" id="idToken" role="tabpanel" aria-labelledby="id-token-btn-vertical">
                                                             <h5 class="card-title">ID Token
-                                                                <a class="btn btn-secondary btn-sm float-right font-weight-300" href="/login?response_type=id_token">Login
+                                                                <a class="btn btn-secondary btn-sm float-right font-weight-300"
+                                                                   href="/login?response_type=id_token">Login
                                                                 </a>
                                                             </h5>
-                                                            <p class="card-text">ID Token , Open IDC for SSO <br/>
-                                                                <img src="https://learn.microsoft.com/en-us/azure/active-directory/develop/media/v2-protocols-oidc/convergence-scenarios-webapp.svg" alt="">
-                                                            </p>
-
+                                                            <div class="text-red">ID Token / OpenID Connect / SSO</div> <br/>
+                                                            <div class="font-weight-200;font-size: 12px">
+                                                                OpenID Connect (OIDC) เป็นส่วนต่อขยาย วิธีการ Authentication ด้วย OAuth2 protocol , เราสามารถใช้ OIDC ทำ Single Sign On (SSO) ระหว่าง Application ที่ใช้ Oauth โดย Security Token ที่เรียกว่า ID Token
+                                                                โดย ใน ID Token จะมี Claims ที่เป็นข้อมูล profile ของ user ที่ทำการ authen อยู่ เช่น ชื่อ นามสกุล รหัสพนักงาน เป็นต้น.
+                                                                <br/>
+                                                            </div><br/>
+                                                            ตัวอย่าง Flow ของ Azure AD  <br/>
+                                                            <img src="https://learn.microsoft.com/en-us/azure/active-directory/develop/media/v2-protocols-oidc/convergence-scenarios-webapp.svg" alt=""><br/>
+                                                            <div class="text-red font-weight-300;font-size"><a href="">ขั้นตอนการตั้งค่าใน Azure Portal (Download here)</a></div><br/>
+                                                            <div class="text-red font-weight-300;font-size"><a href="https://github.com/preedep/webexampleopenidc002">My Example Code [Github]</a></div>
                                                         </div>
                                                         <div class="tab-pane fade" id="hyBridge" role="tabpanel" aria-labelledby="implicit-id-token-auth-code-btn-vertical">
                                                             <h5 class="card-title">Hybrid</h5>
