@@ -1,4 +1,5 @@
 mod entities;
+mod utils;
 
 use actix_web::dev::Service as _;
 use futures_util::future::FutureExt;
@@ -13,23 +14,19 @@ use actix_web::{cookie, middleware, web, App, HttpResponse, HttpServer, Responde
 
 use std::io::ErrorKind::Other;
 
-use crate::entities::{
-    Config, ErrorInfo, GraphMe, JWKSKeyItem, JwtAccessToken, JwtPayloadIDToken, LoginQueryString,
-    MyAppError, MyAppResult, OpenIDConfigurationV2, ResponseAuthorized, JWKS,
-};
+use crate::entities::*;
+use crate::utils::*;
+
 use actix_web::cookie::time::Duration;
 use actix_web::cookie::SameSite;
-use actix_web::http::header::LOCATION;
 use handlebars::{Context, Handlebars, Helper, HelperResult, Output, RenderContext, RenderError};
-use jsonwebtoken::errors::{Error, ErrorKind};
-use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, TokenData, Validation};
+use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use log::{debug, error, info};
 use oauth2::basic::{BasicClient, BasicTokenResponse, BasicTokenType};
 use oauth2::reqwest::async_http_client;
 use oauth2::{
-    AccessToken, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
-    EmptyExtraTokenFields, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, ResponseType, Scope,
-    TokenResponse, TokenUrl,
+    AccessToken, AuthUrl, ClientId, ClientSecret, CsrfToken, EmptyExtraTokenFields,
+    PkceCodeChallenge, RedirectUrl, ResponseType, Scope, TokenResponse,
 };
 use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
@@ -48,122 +45,6 @@ const SESSION_KEY_ID_TOKEN: &str = "ID_TOKEN_KEY";
 const SESSION_KEY_ERROR: &str = "ERROR_KEY";
 const SESSION_KEY_ACCESS_TOKEN: &str = "ACCESS_TOKEN";
 
-const PAGE_PROFILE: &str = "/profile";
-const PAGE_ERROR: &str = "/error";
-
-///
-/// Get JWKS Item by kid
-///
-#[instrument(level = "debug")]
-fn get_jwks_item(jwks: &JWKS, kid: &str) -> Option<JWKSKeyItem> {
-    for item in jwks.keys.iter() {
-        let found_item = item
-            .iter()
-            .find(|&key| key.kid.clone().unwrap_or("".to_string()).eq(kid));
-        if let Some(found_item) = found_item {
-            return Some(found_item.clone());
-        }
-    }
-    None
-}
-///
-/// Function get code verifier
-///
-//#[instrument]
-#[instrument(skip(session))]
-fn get_code_verifier_from_session(
-    session: &Session,
-    key: String,
-) -> MyAppResult<Option<PkceCodeVerifier>> {
-    debug!(
-        "call get_code_verifier_from_session [{:#?}]  with key = {}",
-        session.entries(),
-        key
-    );
-    if let Some(verifier) = session.get::<PkceCodeVerifier>(key.as_str()).unwrap() {
-        debug!("Verifier : {:#?}", verifier.secret());
-        return Ok(Some(verifier));
-    }
-    Err(MyAppError::new(format!("Key [{}] No Value ", key)))
-}
-///
-/// Validate JWT Token
-///
-//#[instrument]
-#[instrument(level = "debug")]
-fn jwt_token_validation<T>(jwt_token: &str, jwks: &JWKS) -> Result<TokenData<T>, Error>
-where
-    T: DeserializeOwned,
-{
-    let header = decode_header(jwt_token);
-    match header {
-        Ok(h) => match get_jwks_item(jwks, h.kid.unwrap().as_str()) {
-            Some(item) => {
-                debug!("Found JWKS Item : {:?}", item);
-                let token = decode::<T>(
-                    jwt_token,
-                    &DecodingKey::from_rsa_components(
-                        item.n.clone().unwrap().as_str(),
-                        item.e.clone().unwrap().as_str(),
-                    )
-                    .unwrap(),
-                    &Validation::new(Algorithm::RS256),
-                );
-                token
-            }
-            None => Err(jsonwebtoken::errors::Error::from(
-                ErrorKind::InvalidAudience,
-            )),
-        },
-        Err(e) => Err(e),
-    }
-}
-///
-/// Get Access Token
-///
-//#[instrument]
-#[instrument(level = "debug")]
-async fn get_access_token(
-    config: &web::Data<Config>,
-    auth_code: &str,
-    code_verifier: &str,
-) -> Result<BasicTokenResponse, std::io::Error> {
-    let client = BasicClient::new(
-        ClientId::new(config.client_id.clone()),
-        Some(ClientSecret::new(config.client_secret.clone())),
-        AuthUrl::new(
-            config
-                .open_id_config
-                .clone()
-                .unwrap()
-                .authorization_endpoint
-                .unwrap(),
-        )
-        .unwrap(),
-        Some(
-            TokenUrl::new(
-                config
-                    .open_id_config
-                    .clone()
-                    .unwrap()
-                    .token_endpoint
-                    .unwrap(),
-            )
-            .unwrap(),
-        ),
-    )
-    // Set the URL the user will be redirected to after the authorization process.
-    .set_redirect_uri(RedirectUrl::new(config.redirect.clone()).unwrap());
-    info!("request access token ");
-    let token_result = client
-        .exchange_code(AuthorizationCode::new(auth_code.to_string()))
-        .add_extra_param("code_verifier", code_verifier)
-        .request_async(async_http_client)
-        .await
-        .map_err(|e| std::io::Error::new(Other, e.to_string()));
-    //debug!("token result > {:#?}", token_result);
-    token_result
-}
 ///
 /// Logout
 ///
@@ -186,8 +67,6 @@ async fn logout(
     debug!("redirect to url > {}", sign_out_url);
     session.purge();
     debug!("Session was purged");
-    //let result = Uri::from_str(sign_out_url.as_str());
-    //Redirect::to(sign_out_url).permanent()
     redirect_to_page(&session, sign_out_url.as_str())
 }
 ///
@@ -215,27 +94,6 @@ async fn post_callback(
     callback(session, params.0, config).await
 }
 
-///
-///  redirect to error page
-///
-//#[instrument]
-#[instrument(skip(session))]
-fn redirect_to_error_page(session: &Session, error: &ErrorInfo) -> HttpResponse {
-    session.insert(SESSION_KEY_ERROR, error).unwrap();
-    HttpResponse::SeeOther()
-        .insert_header((LOCATION, PAGE_ERROR))
-        .finish()
-}
-///
-/// redirect to page
-///
-//#[instrument]
-#[instrument(skip(_session))]
-fn redirect_to_page(_session: &Session, page: &str) -> HttpResponse {
-    HttpResponse::SeeOther()
-        .insert_header((LOCATION, page))
-        .finish()
-}
 ///
 /// Callback
 ///
@@ -609,6 +467,7 @@ async fn profile(
 ///  profile page
 ///
 //#[instrument]
+#[instrument(skip(session))]
 async fn error_display(
     session: Session,
     _data: web::Data<Config>,
@@ -655,7 +514,7 @@ fn middle_ware_session(
 /// Main app
 ///
 #[actix_web::main]
-async fn main() -> std::io::Result<()>{
+async fn main() -> std::io::Result<()> {
     pretty_env_logger::init();
     info!("Server starting...");
     //
@@ -696,18 +555,22 @@ async fn main() -> std::io::Result<()>{
 
     match app_insights_connection_str {
         Ok(app_insights_connection_str) => {
-            debug!("APPLICATIONINSIGHTS_CON_STRING = {}",app_insights_connection_str);
-            let exporter = opentelemetry_application_insights::new_pipeline_from_connection_string(
+            debug!(
+                "APPLICATIONINSIGHTS_CON_STRING = {}",
                 app_insights_connection_str
-            ).unwrap().with_client(
-                reqwest::Client::new()
+            );
+            let exporter = opentelemetry_application_insights::new_pipeline_from_connection_string(
+                app_insights_connection_str,
             )
-                .install_batch(opentelemetry::runtime::Tokio);
+            .unwrap()
+            .with_client(reqwest::Client::new())
+            .with_service_name("WebExampleAzureAD")
+            .install_batch(opentelemetry::runtime::Tokio);
 
             let telemetry = tracing_opentelemetry::layer().with_tracer(exporter);
             let subscriber = Registry::default().with(telemetry);
-            tracing::subscriber::set_global_default(subscriber).expect("setting global default failed");
-
+            tracing::subscriber::set_global_default(subscriber)
+                .expect("setting global default failed");
         }
         Err(e) => {
             error!("Application Insights connection string error {}", e);
@@ -831,7 +694,8 @@ async fn main() -> std::io::Result<()>{
                 redis_connection.as_str(),
                 private_key.clone(),
                 use_cookie_ssl,
-            )).wrap(RequestTracing::new())
+            ))
+            .wrap(RequestTracing::new())
             .wrap(TracingLogger::default())
             //.wrap(RedirectHttps::with_hsts(StrictTransportSecurity::default()))
             .route("/", web::get().to(index))
