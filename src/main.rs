@@ -19,17 +19,15 @@ use crate::utils::*;
 
 use actix_web::cookie::time::Duration;
 use actix_web::cookie::SameSite;
-use actix_web::http::header::LOCATION;
 use handlebars::{Context, Handlebars, Helper, HelperResult, Output, RenderContext, RenderError};
-use jsonwebtoken::errors::{Error, ErrorKind};
-use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, TokenData, Validation};
+use jsonwebtoken::{Algorithm, decode, DecodingKey, Validation};
 use log::{debug, error, info};
 use oauth2::basic::{BasicClient, BasicTokenResponse, BasicTokenType};
 use oauth2::reqwest::async_http_client;
 use oauth2::{
-    AccessToken, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
-    EmptyExtraTokenFields, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, ResponseType, Scope,
-    TokenResponse, TokenUrl,
+    AccessToken, AuthUrl, ClientId, ClientSecret, CsrfToken,
+    EmptyExtraTokenFields, PkceCodeChallenge, RedirectUrl, ResponseType, Scope,
+    TokenResponse,
 };
 use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
@@ -472,6 +470,7 @@ async fn profile(
 ///  profile page
 ///
 //#[instrument]
+#[instrument(skip(session))]
 async fn error_display(
     session: Session,
     _data: web::Data<Config>,
@@ -565,6 +564,7 @@ async fn main() -> std::io::Result<()>{
             ).unwrap().with_client(
                 reqwest::Client::new()
             )
+                .with_service_name("WebExampleAzureAD")
                 .install_batch(opentelemetry::runtime::Tokio);
 
             let telemetry = tracing_opentelemetry::layer().with_tracer(exporter);

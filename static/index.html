@@ -22,7 +22,7 @@
                             <div class="col-lg-10">
                                 <div class="card shadow-lg border-0 rounded-lg mt-10">
                                     <div class="card-header justify-content-center">
-                                        <h3 class="font-weight-light my-4">Login with Azure AD 1.36</h3></div>
+                                        <h3 class="font-weight-light my-4">Login with Azure AD 1.38</h3></div>
                                         <!--<button class="btn btn-primary btn-sm">Logout</button>-->
                                         <div class="card-body">
                                             <div class="row">
@@ -37,22 +37,46 @@
                                                 <div class="col-md-9">
                                                     <div class="tab-content" id="cardPillContentVertical">
                                                         <div class="tab-pane fade show active" id="authCode"  role="tabpanel" aria-labelledby="authcode-btn-vertical">
-                                                            <h5 class="card-title">Auth Code</h5>
+                                                            <h5 class="card-title">Auth Code
+                                                                <a class="btn btn-secondary btn-sm float-right font-weight-300" href="/login?response_type=code">
+                                                                    Login
+                                                                </a>
+                                                            </h5>
+
+                                                            <!--
                                                             <p class="card-text">Auth Code Flow + PKCE , Get user profile from MS Graph API <br/>
                                                                 <img src="https://learn.microsoft.com/en-us/azure/active-directory/develop/media/v2-oauth2-auth-code-flow/convergence-scenarios-native.svg" alt="">
                                                                 ** web api = MS Graph API
                                                             </p>
-                                                            <a class="btn btn-secondary" href="/login?response_type=code">Login</a>
+                                                            -->
+                                                             <div class="text-red">Authorization Code Flow + PKCE (Proof Key for Code Exchange by OAuth Public Clients)</div> <br/>
+                                                             <div class="font-weight-200;font-size: 12px">
+                                                                 Authorization Code เป็นประเภทการให้สิทธิ์ลูกค้าเพื่อนำ Authorization code หรือเรียกกันสั้นๆว่า Auth code มาแลกเปลี่ยนเป็น Access token เพื่อให้ลูกค้าใช้ Access Token ในการเข้าใช้งาน Resource
+                                                                ตรงส่วนนี้ Server หรือผู้ให้บริการ และ Client ต้องคุยกันว่าจะแลกเปลี่ยน Auth code กันแล้วให้
+                                                                Server หรือผู้ให้บริการทำการ Redirect URL ไปยัง URL ใด เพื่อนำมาแลกเป็น Access Token <br/><br/>
+                                                                 PKCE (RFC 7636) เป็นส่วนต่อขยายของ Authorization Code flow เพื่อป้องกัน CSRF และ authorization code injection attacks. (ใน Azure AD มีรองรับ mode นี้)
+                                                             </div><br/>
+                                                                ตัวอย่าง Flow ของ Azure AD  <br/>
+                                                            <img src="https://learn.microsoft.com/en-us/azure/active-directory/develop/media/v2-oauth2-auth-code-flow/convergence-scenarios-native.svg"
+                                                                 alt=""> <br/>
+                                                            ** Resource หากในภาพ ก็คือ Web API <br/>
+                                                            ** web api = MS Graph API (Ex. https://graph.microsoft.com/v1.0/me) <br/><br/>
+
+                                                            <div class="text-red font-weight-300;font-size">ขั้นตอนการตั้งค่าใน Azure Portal</div><br/>
+                                                            <div class="text-red font-weight-300;font-size"><a href="https://github.com/preedep/webexampleopenidc002">My Example Code [Github]</a></div>
                                                         </div>
                                                         <div class="tab-pane fade" id="idToken" role="tabpanel" aria-labelledby="id-token-btn-vertical">
-                                                            <h5 class="card-title">ID Token</h5>
+                                                            <h5 class="card-title">ID Token
+                                                                <a class="btn btn-secondary btn-sm float-right font-weight-300" href="/login?response_type=id_token">Login
+                                                                </a>
+                                                            </h5>
                                                             <p class="card-text">ID Token , Open IDC for SSO <br/>
                                                                 <img src="https://learn.microsoft.com/en-us/azure/active-directory/develop/media/v2-protocols-oidc/convergence-scenarios-webapp.svg" alt="">
                                                             </p>
-                                                            <a class="btn btn-secondary" href="/login?response_type=id_token">Login</a>
+
                                                         </div>
                                                         <div class="tab-pane fade" id="hyBridge" role="tabpanel" aria-labelledby="implicit-id-token-auth-code-btn-vertical">
-                                                            <h5 class="card-title">Hybridge</h5>
+                                                            <h5 class="card-title">Hybrid</h5>
                                                             <p class="card-text">ID Token + Auth Code (for MyAPI)<br/>
                                                                 <img src="https://learn.microsoft.com/en-us/azure/active-directory/develop/media/v2-oauth2-auth-code-flow/convergence-scenarios-native.svg" alt="">
                                                             </p>

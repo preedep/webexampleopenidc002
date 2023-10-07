@@ -21,3 +21,4 @@ run_redis.sh
 local.env
 /static/index_bkk.html
 /static/profile_bkk.html
+/web_tutorial/tutorial1.html
