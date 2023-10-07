@@ -74,7 +74,7 @@
                                                             <div class="text-red">ID Token / OpenID Connect / SSO</div> <br/>
                                                             <div class="font-weight-200;font-size: 12px">
                                                                 OpenID Connect (OIDC) เป็นส่วนต่อขยาย วิธีการ Authentication ด้วย OAuth2 protocol , เราสามารถใช้ OIDC ทำ Single Sign On (SSO) ระหว่าง Application ที่ใช้ Oauth โดย Security Token ที่เรียกว่า ID Token
-                                                                โดย ใน ID Token จะมี Claims ที่เป็นข้อมูล profile ของ user ที่ทำการ authen อยู่ เช่น ชื่อ นามสกุล รหัสพนักงาน เป็นต้น.
+                                                                โดย ใน ID Token จะมี Claims ที่เป็นข้อมูล profile ของ user ที่ทำการ authen อยู่ เช่น ชื่อ นามสกุล รหัสพนักงาน กลุ่มที่อยู่ เป็นต้น.
                                                                 <br/>
                                                             </div><br/>
                                                             ตัวอย่าง Flow ของ Azure AD  <br/>
@@ -83,18 +83,31 @@
                                                             <div class="text-red font-weight-300;font-size"><a href="https://github.com/preedep/webexampleopenidc002">My Example Code [Github]</a></div>
                                                         </div>
                                                         <div class="tab-pane fade" id="hyBridge" role="tabpanel" aria-labelledby="implicit-id-token-auth-code-btn-vertical">
-                                                            <h5 class="card-title">Hybrid</h5>
-                                                            <p class="card-text">ID Token + Auth Code (for MyAPI)<br/>
-                                                                <img src="https://learn.microsoft.com/en-us/azure/active-directory/develop/media/v2-oauth2-auth-code-flow/convergence-scenarios-native.svg" alt="">
-                                                            </p>
-                                                            <a class="btn btn-secondary" href="/login?response_type=code id_token">Login</a>
+                                                            <h5 class="card-title">Hybrid
+                                                                <a class="btn btn-secondary btn-sm float-right font-weight-300" href="/login?response_type=code id_token">Login</a>
+                                                            </h5>
+                                                            <div class="text-red">ID Token ร่วมกับ Auth Code เพื่อขอ Access Token ในการเรียก MyAPI</div> <br/>
+                                                            <div class="font-weight-200;font-size: 12px">
+                                                                   ในตัวอย่างนี้เป็นการ Combined 2 Flows (ID Token กับ Auth Code) ซึ่งในตัวอย่างนี้ เราจะมี MyAPI ซึ่งจะเป็นอีก App (อาจจะมองเป็น service ที่ provide API ให้ระบบหลักเรียก)
+                                                                   โดยจุดประสงค์คือจะกำหนดสิทธิ์การเรียกด้วย Azure AD (API Protect by Azure AD)
+                                                                </div><br/>
+                                                            ตัวอย่าง Flow ของ Azure AD  <br/>
+                                                            <img src="https://learn.microsoft.com/en-us/azure/active-directory/develop/media/v2-oauth2-auth-code-flow/convergence-scenarios-native.svg" alt=""><br/><br/>
+                                                            ตัวอย่าง Flow ของ API Protection <br/>
+                                                            <img src="https://webopenidctutorial001.z23.web.core.windows.net/Api authentication pattern - Page 7.svg" width="100%"><br/>
+
+                                                            <div class="text-red font-weight-300;font-size"><a href="">ขั้นตอนการตั้งค่าใน Azure Portal (Download here)</a></div><br/>
+                                                            <div class="text-red font-weight-300;font-size"><a href="https://github.com/preedep/webexampleopenidc002">My Example Code [Github]</a></div><br/>
+                                                            <div class="text-red font-weight-300;font-size"><a href="https://github.com/preedep/apiexampleopenidc001">My Example Code [MyAPI] [Github]</a></div><br/>
                                                         </div>
                                                         <div class="tab-pane fade" id="implicit" role="tabpanel" aria-labelledby="implicit-id-token-access-token-btn-vertical">
-                                                            <h5 class="card-title">Implicit</h5>
+                                                            <h5 class="card-title">Implicit (ควรใช้น้อยสุด มีความเสี่ยงสูงสุด)
+                                                                <a class="btn btn-secondary btn-sm float-right font-weight-300" href="/login?response_type=id_token token">Login</a>
+                                                            </h5>
                                                             <p class="card-text">ID Token + Access Token (for MyAPI) <br/>
                                                                 <img src="https://learn.microsoft.com/en-us/azure/active-directory/develop/media/v2-oauth2-implicit-grant-flow/convergence-scenarios-implicit.svg" alt="">
                                                             </p>
-                                                            <a class="btn btn-secondary" href="/login?response_type=id_token token">Login</a>
+
                                                         </div>
                                                     </div>
                                                 </div>
