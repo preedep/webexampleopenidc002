@@ -1,45 +1,39 @@
-mod entities;
-mod utils;
-
-use actix_web::dev::Service as _;
-use futures_util::future::FutureExt;
-
 use actix_files::Files;
+use actix_session::{Session, SessionMiddleware};
 use actix_session::config::PersistentSession;
 use actix_session::storage::RedisActorSessionStore;
-use actix_session::{Session, SessionMiddleware};
+use actix_web::{App, cookie, HttpResponse, HttpServer, middleware, Responder, web};
+use actix_web::cookie::SameSite;
+use actix_web::cookie::time::Duration;
+use actix_web::dev::Service as _;
 use actix_web::middleware::Logger;
 use actix_web::web::Data;
-use actix_web::{cookie, middleware, web, App, HttpResponse, HttpServer, Responder};
-
-use std::io::ErrorKind::Other;
-
-use crate::entities::*;
-use crate::utils::*;
-
-use actix_web::cookie::time::Duration;
-use actix_web::cookie::SameSite;
+use actix_web_opentelemetry::RequestTracing;
+use futures_util::future::FutureExt;
 use handlebars::{Context, Handlebars, Helper, HelperResult, Output, RenderContext, RenderError};
-use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+use jsonwebtoken::{Algorithm, decode, DecodingKey, Validation};
 use log::{debug, error, info};
-use oauth2::basic::{BasicClient, BasicTokenResponse, BasicTokenType};
-use oauth2::reqwest::async_http_client;
 use oauth2::{
     AccessToken, AuthUrl, ClientId, ClientSecret, CsrfToken, EmptyExtraTokenFields,
     PkceCodeChallenge, RedirectUrl, ResponseType, Scope, TokenResponse,
 };
+use oauth2::basic::{BasicClient, BasicTokenResponse, BasicTokenType};
+use oauth2::reqwest::async_http_client;
 use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
 use serde_json::json;
-
-use actix_web_opentelemetry::RequestTracing;
-
+use std::io::ErrorKind::Other;
 use tracing::Span;
+use tracing_actix_web::TracingLogger;
 use tracing_attributes::instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use tracing_subscriber::{layer::SubscriberExt, Registry};
 
-use tracing_actix_web::TracingLogger;
+use crate::entities::*;
+use crate::utils::*;
+
+mod entities;
+mod utils;
 
 const SESSION_KEY_ID_TOKEN: &str = "ID_TOKEN_KEY";
 const SESSION_KEY_ERROR: &str = "ERROR_KEY";
