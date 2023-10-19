@@ -1,19 +1,20 @@
-use crate::entities::{Config, ErrorInfo, JWKSKeyItem, MyAppError, MyAppResult, JWKS};
-use crate::SESSION_KEY_ERROR;
 use actix_session::Session;
-use actix_web::{web, HttpResponse};
+use actix_web::{HttpResponse, web};
+use jsonwebtoken::{Algorithm, decode, decode_header, DecodingKey, TokenData, Validation};
 use jsonwebtoken::errors::{Error, ErrorKind};
-use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, TokenData, Validation};
 use log::{debug, info};
+use oauth2::{
+    AuthorizationCode, AuthUrl, ClientId, ClientSecret, PkceCodeVerifier, RedirectUrl, TokenUrl,
+};
 use oauth2::basic::{BasicClient, BasicTokenResponse};
 use oauth2::reqwest::async_http_client;
-use oauth2::{
-    AuthUrl, AuthorizationCode, ClientId, ClientSecret, PkceCodeVerifier, RedirectUrl, TokenUrl,
-};
 use reqwest::header::LOCATION;
 use serde::de::DeserializeOwned;
 use std::io::ErrorKind::Other;
 use tracing_attributes::instrument;
+
+use crate::entities::{Config, ErrorInfo, JWKS, JWKSKeyItem, MyAppError, MyAppResult};
+use crate::SESSION_KEY_ERROR;
 
 pub const PAGE_PROFILE: &str = "/profile";
 pub const PAGE_ERROR: &str = "/error";
